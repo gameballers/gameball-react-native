@@ -7,7 +7,11 @@ import {
   Platform,
   Share,
 } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import {
+  WebView,
+  type WebViewMessageEvent,
+  type WebViewNavigation,
+} from 'react-native-webview';
 import Modal from 'react-native-modal';
 import styles from './styles';
 const package_json = require('../../package.json');
@@ -16,6 +20,7 @@ interface Props {
   modal?: boolean;
   openDetail?: string;
   hideNavigation?: boolean;
+  shouldAllowNavigation?: (event: WebViewNavigation) => boolean;
 }
 
 interface State {
@@ -146,6 +151,7 @@ class GameballWidget extends React.Component<Props, State> {
         originWhitelist={originWhitelist}
         showsVerticalScrollIndicator={false}
         onMessage={this.onMessage}
+        onShouldStartLoadWithRequest={this.props.shouldAllowNavigation}
         injectedJavaScriptBeforeContentLoaded="
         if (navigator.share == null) {
           navigator.share = (param) => {
