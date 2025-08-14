@@ -1,7 +1,16 @@
+// Modern React Native API
+import GameballApp from './GameballApp';
 import GameballWidget from './GameballWidget';
-import * as GameballSDK from './GameballSDK';
-import InAppNotification from './InAppNotification';
-import type { Player, PlayerAttributes } from './GameballSDK/types';
-import type { GBNotification } from './InAppNotification/types';
-export type { Player, GBNotification, PlayerAttributes };
-export { GameballWidget, GameballSDK, InAppNotification };
+export { GameballApp, GameballWidget };
+export default GameballApp;
+
+// Types following React Native conventions
+export type {
+  GameballConfig,
+  InitializeCustomerRequest,
+  CustomerAttributes,
+  InitializeCustomerResponse,
+  Event,
+  ShowProfileRequest,
+  Callback,
+} from './types/Common';

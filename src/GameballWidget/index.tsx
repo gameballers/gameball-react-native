@@ -10,13 +10,15 @@ import {
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import Modal from 'react-native-modal';
 import styles from './styles';
-import { LanguageUtils } from './languageUttils';
+import { LanguageUtils } from './languageUtils';
+import { API_ENDPOINTS, WEBVIEW_CONFIG } from '../constants';
 const package_json = require('../../package.json');
 
 interface Props {
   modal?: boolean;
   openDetail?: string;
   hideNavigation?: boolean;
+  showCloseButton?: boolean;
 }
 
 interface State {
@@ -25,24 +27,36 @@ interface State {
   showModal: boolean;
 }
 type initFunctionParams = {
-  api: string;
+  apiKey: string;
   lang: string;
   shop?: string;
   platform?: string;
-  deepLinks?: string[];
+  openDetail?: string;
   apiPrefix?: string;
   widgetUrlPrefix?: string;
+  customerId?: string;
+  hideNavigation?: boolean;
+  modal?: boolean;
+  mainColor?: string;
+  showCloseButton?: boolean;
+  closeButtonColor?: string;
 };
 class GameballWidget extends React.Component<Props, State> {
   static apiPrefix: string = '';
   static widgetUrlPrefix: string = '';
   static apiKey: string = '';
   static lang: string = '';
-  static playerId: string = '';
+  static customerId: string = '';
   static shop?: string = '';
   static platform?: string = '';
-  static deepLinks?: string[] = [];
-  static mainColor = null;
+  static openDetail?: string = '';
+  static hideNavigation?: boolean = false;
+  static modal?: boolean = true;
+  static mainColor: string | null = null;
+  static showCloseButton?: boolean = true;
+  static closeButtonColor: string | null = null;
+
+  private _isMounted: boolean = false;
 
   constructor(props: Props) {
     super(props);
@@ -54,49 +68,57 @@ class GameballWidget extends React.Component<Props, State> {
   };
 
   static async init({
-    api,
+    apiKey,
     lang,
     shop,
     platform,
-    deepLinks,
-    apiPrefix = 'https://api.gameball.co/',
-    widgetUrlPrefix = 'https://m.gameball.app',
+    openDetail,
+    apiPrefix = API_ENDPOINTS.BASE_URL,
+    widgetUrlPrefix = API_ENDPOINTS.WIDGET_BASE_URL,
+    customerId,
+    hideNavigation,
+    modal = true,
+    mainColor,
+    showCloseButton = true,
+    closeButtonColor
   }: initFunctionParams) {
-    GameballWidget.apiKey = api;
-    GameballWidget.lang = lang;
-    GameballWidget.shop = shop;
-    GameballWidget.platform = platform;
-    GameballWidget.deepLinks = deepLinks;
-    GameballWidget.apiPrefix = apiPrefix;
-    GameballWidget.widgetUrlPrefix = widgetUrlPrefix;
+    // Configure widget properties using Object.assign for cleaner code
+    Object.assign(GameballWidget, {
+      apiKey,
+      lang,
+      shop,
+      platform,
+      openDetail,
+      apiPrefix,
+      widgetUrlPrefix,
+      hideNavigation,
+      modal,
+      showCloseButton,
+    });
 
-    try {
-      const response = await fetch(
-        `https://api.gameball.co/v1.0/bots2/BotSettings?apiKey=${api}`,
-        {
-          method: 'GET',
-        }
-      );
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch bot settings. Status: ${response.status}`
-        );
-      }
-      const json = await response.json();
-
-      if (json && json.response) {
-        GameballWidget.mainColor = json.response.botMainColor.replace('#', '');
-      }
-    } catch (error) {
-      console.error('Error during initialization:', error);
+    // Set optional properties conditionally
+    if (customerId) {
+      GameballWidget.customerId = customerId;
+    }
+    if (mainColor) {
+      GameballWidget.mainColor = mainColor;
+    }
+    if (closeButtonColor) {
+      GameballWidget.closeButtonColor = closeButtonColor;
     }
   }
-  static initialize_player(playerId: string) {
-    GameballWidget.playerId = playerId;
+  static initializeCustomer(customerId: string) {
+    GameballWidget.customerId = customerId;
   }
-  static getApiKey() {
-    return GameballWidget.apiKey;
+
+  componentDidMount() {
+    this._isMounted = true;
   }
+
+  componentWillUnmount() {
+    this._isMounted = false;
+  }
+
   async onMessage(e: WebViewMessageEvent) {
     if (Platform.OS === 'ios') return;
     const { data } = e.nativeEvent;
@@ -122,6 +144,7 @@ class GameballWidget extends React.Component<Props, State> {
       }
     }
   }
+
   renderWidgetComponent({
     params,
     scrollEnabled,
@@ -129,14 +152,10 @@ class GameballWidget extends React.Component<Props, State> {
     params: string;
     scrollEnabled: boolean;
   }) {
-    let originWhitelist = [
-      'https://m.gameball.app*',
-      'http://m.gameball.app*',
-      'intent://*',
+    const originWhitelist = [
+      ...WEBVIEW_CONFIG.ALLOWED_ORIGINS,
+      ...(GameballWidget.openDetail ? [GameballWidget.openDetail] : []),
     ];
-    if (GameballWidget.deepLinks ?? [].length > 0) {
-      originWhitelist = originWhitelist.concat(GameballWidget.deepLinks ?? []);
-    }
 
     return (
       <WebView
@@ -159,17 +178,34 @@ class GameballWidget extends React.Component<Props, State> {
       />
     );
   }
-  showProfile() {
-    this.setState({ showModal: true });
-  }
-  render() {
-    const { playerId, apiKey, lang, shop, platform, mainColor } =
-      GameballWidget;
 
-    const { openDetail, hideNavigation } = this.props;
+  showProfile() {
+    // Check if component is mounted before calling setState
+    if (this._isMounted) {
+      this.setState({ showModal: true });
+    } else {
+      // If not mounted, set initial state directly
+      this.state = { ...this.state, showModal: true };
+    }
+  }
+
+  render() {
+    const {
+      customerId,
+      apiKey,
+      lang,
+      shop,
+      platform,
+      openDetail,
+      hideNavigation,
+      modal,
+      showCloseButton,
+    } = GameballWidget;
+
+    const mainColor = GameballWidget.mainColor;
 
     const params =
-      `playerId=${playerId}&apiKey=${apiKey}&lang=${lang}` +
+      `playerId=${customerId}&apiKey=${apiKey}&lang=${lang}` +
       `${shop ? `&shop=${shop}` : ''}` +
       `${platform ? `&platform=${platform}` : ''}` +
       `&os=${Platform.OS}` +
@@ -179,20 +215,25 @@ class GameballWidget extends React.Component<Props, State> {
       `${hideNavigation ? `&hideNavigation=${hideNavigation}` : ''}`;
 
     const isRtl = LanguageUtils.isRtl(lang);
+    const closeButtonColor = GameballWidget.closeButtonColor || '#CECECE';
 
-    return this.props.modal ? (
+    return modal ? (
       <Modal isVisible={this.state.showModal} style={styles.modalStyle}>
         <View style={styles.modalContainerStyle}>
-          <TouchableOpacity
-            onPress={() => this.setState({ showModal: false })}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr}
-          >
-            <Image
-              source={require('../Assets/close.png')}
-              style={styles.closeIconStyle}
-            />
-          </TouchableOpacity>
+          {showCloseButton && (
+            <TouchableOpacity
+              onPress={() => this.setState({ showModal: false })}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={
+                isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr
+              }
+            >
+              <Image
+                source={require('../Assets/close.png')}
+                style={[styles.closeIconStyle, { tintColor: `${closeButtonColor}` }]}
+              />
+            </TouchableOpacity>
+          )}
           <SafeAreaView style={styles.webviewStyle}>
             {this.renderWidgetComponent({ params, scrollEnabled: true })}
           </SafeAreaView>

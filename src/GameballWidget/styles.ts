@@ -35,7 +35,7 @@ export default StyleSheet.create({
     top: 20,
     zIndex: 1,
   },
-    closeButtonStyleRtl: {
+  closeButtonStyleRtl: {
     position: 'absolute',
     left: 20,
     top: 20,
