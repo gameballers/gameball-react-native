@@ -92,6 +92,9 @@ export class GameballApp {
     try {
       this.ensureInitialized();
 
+      // Validate the request - any validation errors will be caught and trigger callback
+      this.validateCustomerRequest(request);
+
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
 
@@ -209,6 +212,24 @@ export class GameballApp {
   private ensureInitialized(): void {
     if (!this.isInitialized) {
       throw new Error(ERROR_MESSAGES.NOT_INITIALIZED);
+    }
+  }
+
+  private validateCustomerRequest(request: InitializeCustomerRequest): void {
+    if (!request.customerId || request.customerId.trim() === '') {
+      throw new Error('Customer ID cannot be empty');
+    }
+
+    // Validate that device token and push provider are both provided or both null
+    const hasDeviceToken = request.deviceToken != null && request.deviceToken.trim() !== '';
+    const hasPushProvider = request.pushProvider != null;
+
+    if (hasPushProvider && !hasDeviceToken) {
+      throw new Error('Device token is required when push provider is set');
+    }
+
+    if (!hasPushProvider && hasDeviceToken) {
+      throw new Error('Push provider is required when device token is set');
     }
   }
 
