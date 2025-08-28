@@ -3,6 +3,11 @@
  * Following React Native conventions with plain objects and optional properties
  */
 
+export enum PushProvider {
+  Firebase = 'Firebase',
+  Huawei = 'Huawei'
+}
+
 export interface GameballConfig {
   apiKey: string;
   lang: string;
@@ -27,7 +32,7 @@ export interface InitializeCustomerRequest {
   referralCode?: string;
   customerAttributes?: CustomerAttributes;
   deviceToken?: string;
-  pushProvider?: string;
+  pushProvider?: PushProvider;
   isGuest?: boolean;
 }
 
