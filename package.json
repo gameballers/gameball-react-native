@@ -1,6 +1,6 @@
 {
   "name": "react-native-gameball",
-  "version": "3.0.0",
+  "version": "3.0.2",
   "description": "React native package for Gameball widget",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
@@ -14,6 +14,9 @@
     "ios",
     "cpp",
     "*.podspec",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
     "!ios/build",
     "!android/build",
     "!android/gradle",
