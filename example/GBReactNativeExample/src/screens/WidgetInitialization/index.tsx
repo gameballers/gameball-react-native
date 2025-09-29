@@ -4,7 +4,7 @@ import {Button} from 'react-native';
 import {StyleSheet} from 'react-native';
 import {TextInput} from 'react-native';
 import {SafeAreaView} from 'react-native';
-import {GameballWidget} from 'react-native-gameball';
+import {GameballApp} from 'react-native-gameball';
 import type {RootStackParamList} from '../../App';
 type DataState = {
   apiKey: string;

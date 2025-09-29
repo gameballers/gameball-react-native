@@ -1,0 +1,126 @@
+# 📋 Changelog
+
+All notable changes to Gameball React Native SDK are documented here.
+
+---
+
+## [3.0.0] - 2025-09-29 🎉
+
+> **Major Release**: Complete SDK modernization with breaking API changes for React Native best practices
+
+### ✨ Added
+- 🏗️ **GameballApp Singleton Pattern**: Centralized SDK management with `getInstance()` method
+- ⚙️ **Modern TypeScript API**: Full type safety with comprehensive interface definitions
+- 🔧 **Promise-based Architecture**: Native async/await support with optional callback backward compatibility
+- 🚀 **Enhanced Customer Management**: New `InitializeCustomerRequest` with builder-like object structure
+- 📊 **Improved Event Tracking**: Restructured `Event` interface with flexible metadata support
+- 🎁 **Advanced Profile Widget**: New `ShowProfileRequest` with comprehensive customization options
+- 🌐 **Multi-language Support**: Dynamic language switching with `changeLanguage()` method
+- 📱 **Push Notification Integration**: Native Firebase and Huawei push provider support
+- 🛡️ **Enhanced Validation**: Comprehensive input validation with proper error messages
+- 🔗 **Referral Code Extraction**: Built-in `getReferralCode()` utility for deep link handling
+- ⚡ **Platform Detection**: Automatic OS and version detection for better analytics
+- 🔧 **Debug Logging**: Development-mode logging for better debugging experience
+
+### 🔄 Changed
+- 💥 **BREAKING**: Migrated from individual method calls to singleton `GameballApp` pattern
+- 💥 **BREAKING**: All request models now use plain object interfaces instead of builder classes
+- 💥 **BREAKING**: Method signatures updated to use TypeScript interfaces with optional callbacks
+- 💥 **BREAKING**: Customer attributes structure reorganized with `customAttributes` and `additionalAttributes`
+- 💥 **BREAKING**: Event tracking now requires `events` object with nested event data
+- 🚀 **Performance**: Optimized internal architecture with reduced memory footprint
+- 📦 **Dependencies**: Updated to React Native 0.70+ with modern Metro bundler support
+- 🔧 **Error Handling**: Enhanced error messages with specific validation feedback
+- 📱 **Widget Integration**: Improved profile widget rendering with better customization options
+
+### 🗑️ Removed
+- 💥 **BREAKING**: Removed legacy builder pattern classes in favor of plain interfaces
+- 💥 **BREAKING**: Deprecated old initialization methods
+- 💥 **BREAKING**: Removed multiple method overloads (replaced with single interface-based methods)
+- 🧹 **Cleanup**: Removed unused internal dependencies and legacy code paths
+
+### 🐛 Fixed
+- 🔧 **Widget Display**: Fixed profile widget not displaying on certain device configurations
+- 🔧 **Memory Management**: Resolved memory leaks in WebView integration
+- 🔧 **Type Safety**: Fixed TypeScript compilation issues with strict mode
+- 🔧 **Async Handling**: Improved promise rejection handling and error propagation
+- 🔧 **Push Notifications**: Fixed device token validation for Firebase and Huawei providers
+
+### 🔒 Security
+- 🛡️ **Input Validation**: Enhanced validation prevents invalid API calls and data corruption
+- 🛡️ **API Key Management**: Improved API key handling with better security practices
+- 🛡️ **Error Sanitization**: Proper error message sanitization to prevent information leakage
+
+---
+
+## [2.1.3] - 2025-06-30 🔧
+
+> **Patch Release**: WebView optimizations and hardware acceleration
+
+### ✨ Added
+- 🔧 **WebView Version Control**: Set specific webview version for consistency
+- ⚡ **Hardware Acceleration**: Enabled webview android hardware acceleration for better performance
+
+### 🔄 Changed
+- 📦 Updated WebView integration for better stability
+- 🚀 Improved rendering performance on Android devices
+
+---
+
+## [2.1.2] - 2025-06-04 🔧
+
+> **Patch Release**: RTL/LTR positioning improvements
+
+### 🐛 Fixed
+- 🔧 **Widget Positioning**: Handled LTR and RTL positioning of gameball widget's close button
+- 📱 **Localization**: Improved widget display for Arabic and other RTL languages
+- 🎯 **UI/UX**: Better close button placement based on language direction
+
+### 🔄 Changed
+- 🌐 Enhanced internationalization support for RTL languages
+- 📦 Updated positioning logic for better cross-language compatibility
+
+---
+
+## [2.1.1] - 2024-01-07 🔧
+
+> **Patch Release**: Repository restructuring and improvements
+
+### 🔄 Changed
+- 🏗️ **Repository Structure**: Refactored repository organization
+- 📦 **Version Management**: Bumped version with improved release process
+- 🔧 **Build Process**: Enhanced build configuration
+
+### 🐛 Fixed
+- 🔧 Fixed build and packaging issues
+- 📱 Improved module resolution
+- 🛡️ Enhanced error handling
+
+---
+
+## [2.1.0] - 2024-01-07 📱
+
+> **Minor Release**: Enhanced initialization and Firebase integration
+
+### ✨ Added
+- 🔧 **New Init Parameters**: Added new initialization function parameters for better configuration
+- 🔥 **Firebase Integration**: Added Firebase messaging integration for Android push notifications
+- 📱 **React Native CLI Example**: Added comprehensive example app with React Native CLI
+- 📊 **Notification Data Handling**: Enhanced notification data passing to Notification component
+
+### 🔄 Changed
+- 🚀 **Initialization Flow**: Improved SDK initialization with more flexible parameters
+- 📦 **Dependencies**: Updated Firebase dependencies for better compatibility
+- 🏗️ **Example App**: Refactored example app structure
+
+### 🗑️ Removed
+- 🧹 **Firebase Integration Cleanup**: Removed conflicting Firebase integration components for cleaner implementation
+
+### 🐛 Fixed
+- 🔧 Fixed notification handling edge cases
+- 📱 Improved push notification registration flow
+- 🛡️ Enhanced error reporting and debugging capabilities
+
+---
+
+*For migration guides and detailed upgrade instructions, see [MIGRATION.md](./MIGRATION.md)*
