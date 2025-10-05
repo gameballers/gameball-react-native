@@ -212,7 +212,7 @@ class GameballWidget extends React.Component<Props, State> {
     const mainColor = GameballWidget.mainColor;
 
     const params =
-      `playerId=${customerId}&apiKey=${apiKey}&lang=${lang}` +
+      `customerId=${customerId}&apiKey=${apiKey}&lang=${lang}` +
       `${shop ? `&shop=${shop}` : ''}` +
       `${platform ? `&platform=${platform}` : ''}` +
       `${sessionToken ? `&sessionToken=${sessionToken}` : ''}` +
