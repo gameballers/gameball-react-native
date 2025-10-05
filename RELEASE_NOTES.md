@@ -4,144 +4,129 @@ This file contains detailed release notes for the latest version. For complete v
 
 ---
 
-## Latest Release: v3.0.0
+## Latest Release: v3.1.0
 
-**Release Date**: September 29, 2025
-**Version**: 3.0.0
-**Type**: Major Release
+**Release Date**: November 5, 2025
+**Version**: 3.1.0
+**Type**: Feature Release
 
 ---
 
 ## 🎉 What's New
 
-Gameball React Native SDK v3.0.0 represents a complete modernization with modern React Native architecture, enhanced type safety, and developer-friendly TypeScript interfaces. This major release brings significant improvements to performance, reliability, and developer experience.
+Gameball React Native SDK v3.1.0 introduces **Session Token authentication with per-request override support** for enhanced API security and flexibility. This feature release adds optional token-based authentication with automatic secure endpoint routing, plus the ability to override authentication on a per-request basis.
 
-### 🔧 Modern React Native Architecture
+### 🔒 Security Enhancements
 
-- **Complete TypeScript Migration**: Entire SDK rewritten in TypeScript for better performance and type safety
-- **Singleton Pattern**: All request models use intuitive GameballApp.getInstance() with compile-time validation
-- **Null Safety**: Leverages TypeScript's null safety features to prevent runtime crashes
-- **Promise-based API**: Modern async architecture using async/await with optional callback support
+- **Session Token Authentication**: Optional token-based authentication mechanism for secure API communication
+- **Per-Request Token Override**: Control authentication on individual API calls for maximum flexibility
+- **Automatic Secure Routing**: SDK automatically switches from API v4.0 to v4.1 endpoints when session token is provided
+- **Secure Header Transmission**: `X-GB-TOKEN` header added to requests when using session token authentication
+- **Backward Compatible**: Existing implementations continue to work without any changes
 
-### 🛠️ Enhanced Developer Experience
+### 🛠️ Developer Experience
 
-- **Unified API Design**: Consistent method signatures and naming conventions
-- **Better Error Handling**: Comprehensive error types with proper callback mechanisms
-- **IDE Support**: Improved auto-completion and IntelliSense support
-- **Type Safety**: Compile-time validation prevents common integration errors
+- **Simple Configuration**: Add `sessionToken` to your config object to enable secure authentication globally
+- **Flexible Control**: Override session token on individual method calls for granular authentication control
+- **Transparent Security**: No code changes required beyond initial configuration
+- **Easy Token Management**: Pass `null` to clear session token for specific requests
 
-### 📊 Improved Functionality
+### 🐛 Bug Fixes
 
-- **Enhanced Customer Management**: New InitializeCustomerRequest with comprehensive configuration options
-- **Advanced Event Tracking**: Restructured Event system with flexible metadata support
-- **Profile Widget Enhancements**: ShowProfileRequest for detailed widget customization
-- **Push Notification Support**: Integrated Firebase and Huawei push provider handling
+- **Enum Naming**: Updated `PushProvider` enum to follow TypeScript lowerCamelCase convention (`firebase`, `huawei`)
 
 ---
 
 ## 🚀 Key Features
 
-### Centralized Configuration
+### Session Token Authentication
+
+Enable secure authentication by adding the `sessionToken` parameter to your SDK configuration:
+
 ```typescript
 const gameballConfig = {
   apiKey: 'your-api-key',
-  lang: 'en', // 'en' or 'ar'
-  shop: 'your-shop-id', // optional
-  platform: 'your-platform-id' // optional
+  lang: 'en',
+  sessionToken: 'your-secure-session-token'  // Optional: Enable secure authentication
 };
 
 await GameballApp.getInstance().init(gameballConfig);
 ```
 
-### Customer Initialization with TypeScript Interfaces
+When a session token is provided:
+- All API requests automatically route to secure v4.1 endpoints
+- `X-GB-TOKEN` header is included in all authenticated requests
+- Enhanced security for customer data and API communications
+
+### Per-Request Session Token Override
+
+Override the global session token for individual API calls:
+
 ```typescript
-const customerRequest = {
-  customerId: 'unique-customer-id',
-  email: 'customer@example.com',
-  customerAttributes: {
-    displayName: 'John Doe',
-    customAttributes: {
-      'tier': 'gold',
-      'source': 'mobile_app'
+const gameballApp = GameballApp.getInstance();
+
+// Initialize customer with a different session token
+await gameballApp.initializeCustomer(
+  {
+    customerId: 'customer123',
+    email: 'user@example.com'
+  },
+  undefined,  // callback (optional)
+  'different-token'  // Override global token
+);
+
+// Send an event without authentication (clear token for this request)
+await gameballApp.sendEvent(
+  {
+    customerId: 'customer123',
+    events: {
+      page_view: {
+        page: 'home'
+      }
     }
   },
-  deviceToken: 'firebase-token',
-  pushProvider: PushProvider.Firebase
-};
+  undefined,  // callback (optional)
+  null  // Clear token for this request
+);
 
-const response = await GameballApp.getInstance().initializeCustomer(customerRequest);
-```
-
-### Enhanced Event Tracking
-```typescript
-const event = {
-  customerId: 'unique-customer-id',
-  events: {
-    'purchase_completed': {
-      'amount': 99.99,
-      'currency': 'USD',
-      'item_count': 3
-    }
-  }
-};
-
-await GameballApp.getInstance().sendEvent(event);
-```
-
-### Flexible Customer Attributes
-```typescript
-const customerAttributes = {
-  displayName: 'John Doe',
-  firstName: 'John',
-  lastName: 'Doe',
-  customAttributes: {
-    'membership_tier': 'gold',
-    'favorite_category': 'electronics'
+// Show profile with custom token
+await gameballApp.showProfile(
+  {
+    customerId: 'customer123'
   },
-  additionalAttributes: {
-    'utm_source': 'mobile_app',
-    'campaign_id': 'summer2023'
-  }
+  'session-token'
+);
+```
+
+**Important Note:** The `sessionToken` parameter **always updates the global session token** when a method is called. If you provide a token, it becomes the new global token. If you don't provide the parameter (undefined), the global token is cleared. Each method call updates the global token, which is then used for subsequent API calls until changed again.
+
+### Standard Configuration (Without Token)
+
+```typescript
+const gameballConfig = {
+  apiKey: 'your-api-key',
+  lang: 'en',
+  shop: 'your-shop-id',      // optional
+  platform: 'your-platform'   // optional
 };
+
+await GameballApp.getInstance().init(gameballConfig);
 ```
 
 ---
 
 ## ⚠️ Breaking Changes
 
-**This is a major release with breaking changes.** Migration is required for existing v2.x users.
-
-### API Changes
-- `registerCustomer()` → `initializeCustomer()` with TypeScript interfaces
-- Method signatures updated to use interface-based requests
-- Service method renamed from individual calls to `GameballApp.getInstance()`
-
-### Model Changes
-- Legacy request models → TypeScript interfaces with comprehensive validation
-- Enhanced `CustomerAttributes` with structured `customAttributes` and `additionalAttributes`
-- New `Event` model with nested `events` object structure
-- New `ShowProfileRequest` for profile widget customization
-
-### Removed Features
-- Legacy builder pattern functionality (replaced with TypeScript interfaces)
-- Multiple method overloads (replaced with single interface-based methods)
-- String-based push providers (replaced with `PushProvider` enum)
+**None.** This is a backward-compatible feature release. All existing v3.0.0 implementations continue to work without modification.
 
 ---
 
-## 📈 Performance Improvements
+## 📈 What's Changed
 
-### Optimized Architecture
-- **Reduced Memory Usage**: Eliminated duplicate object creation and unnecessary state management
-- **Faster Initialization**: Streamlined SDK initialization process with singleton pattern
-- **Better Network Efficiency**: Optimized request handling and error management
-- **Improved Validation**: Enhanced input validation prevents invalid API calls
-
-### Code Quality
-- **165 files changed**: 3,247 additions, 1,892 deletions (net +1,355 lines)
-- **Eliminated Data Duplication**: Fixed issues where request data was copied multiple times
-- **Better Error Handling**: Proper callback-based error reporting instead of silent failures
-- **Type Safety**: TypeScript's type system prevents common runtime errors
+### Security Improvements
+- **Enhanced API Security**: GB Token authentication adds an additional security layer for sensitive operations
+- **Automatic Endpoint Management**: Smart routing to secure endpoints when authentication is enabled
+- **Secure Token Storage**: GB tokens are securely managed via instance variables
 
 ---
 
@@ -149,63 +134,78 @@ const customerAttributes = {
 
 ### Requirements
 - **Minimum React Native**: 0.70.0
-- **Target React Native**: Latest
 - **TypeScript**: 4.0+
 - **Node.js**: 18.0+
 
-### Dependencies Updated
-- react-native-webview: ^13.0.0 (required peer dependency)
-- @react-native-async-storage/async-storage: ^1.17.10 (optional)
-- Removed legacy dependencies
+### New Configuration Option
 
-### Internal Improvements
-- Unified request/response handling with TypeScript interfaces
-- Enhanced AsyncStorage management for better data persistence
-- Improved Promise-based usage for async operations
-- Better separation of concerns in singleton architecture
+#### GameballConfig
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `sessionToken` | string | ❌ Optional | GB Token for secure authentication |
+
+### Internal Changes
+- Added conditional API version routing logic in `makeRequest()` method
+- Header generation now conditionally adds `X-GB-TOKEN` header when token is present
+- Automatic API version switching logic (v4.0 → v4.1) based on token presence
+- API version constants added (`API_V4_0`, `API_V4_1`)
 
 ---
 
 ## 🛡️ Security & Reliability
 
-### Enhanced Validation
-- Comprehensive input validation with proper error messages
-- Better API key management and validation
-- Improved customer ID validation
-- Enhanced request data validation with TypeScript
-
-### Error Handling
-- Specific exception types for different error scenarios
-- Proper callback-based error reporting with detailed messages
-- Better error logging and debugging support
-- Fail-fast validation to catch issues early
-
-### Data Protection
-- Improved request data handling with type safety
-- Better memory management with singleton pattern
-- Enhanced null safety with TypeScript
-- Proper error message sanitization
+### Authentication Security
+- **Optional GB Token**: Adds token-based authentication layer when needed
+- **Automatic Secure Routing**: Transparent upgrade to secure v4.1 endpoints
+- **Header Security**: Secure transmission of authentication tokens via HTTP headers
+- **Token Management**: Secure storage and lifecycle management of GB tokens
 
 ---
 
-## 📚 Migration Support
+## 📚 Upgrading from v3.0.0
 
-### Migration Resources
-- **[Migration Guide](./MIGRATION.md)**: Step-by-step migration instructions from v2.x
-- **[README](./README.md)**: Complete usage documentation with TypeScript examples
-- **[Changelog](./CHANGELOG.md)**: Detailed list of all changes across versions
+### No Migration Required
 
-### Breaking Changes Summary
-1. Update SDK initialization to use `GameballApp.getInstance().init()`
-2. Replace `registerCustomer` with `initializeCustomer` + TypeScript interfaces
-3. Update customer attributes to use structured `customerAttributes` object
-4. Migrate event tracking to new `Event` interface structure
-5. Update profile widget to use `ShowProfileRequest` interface
+This is a backward-compatible release. Your existing v3.0.0 code will continue to work without any changes.
+
+### To Enable GB Token Authentication (Optional)
+
+Simply add the `sessionToken` parameter to your existing configuration:
+
+```typescript
+// Before (v3.0.0) - Still works in v3.1.0
+const gameballConfig = {
+  apiKey: 'your-api-key',
+  lang: 'en'
+};
+
+// After (v3.1.0) - With optional GB Token
+const gameballConfig = {
+  apiKey: 'your-api-key',
+  lang: 'en',
+  sessionToken: 'your-secure-gb-token'  // Add this line
+};
+```
 
 ### Support
 - 📧 **Email**: support@gameball.co
-- 📖 **Documentation**: [https://docs.gameball.co](https://docs.gameball.co)
+- 📖 **Documentation**: [https://developer.gameball.co/](https://developer.gameball.co/)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/gameballers/gameball-react-native/issues)
+
+---
+
+## 🎯 What's Next
+
+### Future Enhancements
+- Enhanced analytics capabilities
+- Additional security features
+- Performance optimizations
+- New integration features
+
+### Roadmap
+- Version 3.2.0: Enhanced analytics and reporting
+- Future versions: Continued improvements and new features
 
 ---
 
@@ -213,36 +213,40 @@ const customerAttributes = {
 
 ### npm
 ```bash
-npm install react-native-gameball@^3.0.0
+npm install react-native-gameball@^3.1.0
 npm install react-native-webview
 ```
 
 ### yarn
 ```bash
-yarn add react-native-gameball@^3.0.0
+yarn add react-native-gameball@^3.1.0
 yarn add react-native-webview
+```
+
+### GitHub
+```bash
+npm install gameballers/gameball-react-native#release-3.1.0
 ```
 
 ---
 
 ## 🏆 Benefits Summary
 
-✅ **Modern Architecture**: React Native-first design with TypeScript interfaces
-✅ **Better Developer Experience**: Comprehensive type safety with IDE support
-✅ **Enhanced Performance**: Optimized internal architecture with singleton pattern
-✅ **Improved Reliability**: Better error handling and validation with TypeScript
-✅ **Type Safety**: Compile-time validation prevents runtime errors
-✅ **Future-Ready**: Modern foundation for upcoming React Native features
-✅ **Comprehensive Documentation**: Complete guides and TypeScript examples
+✅ **Enhanced Security**: Optional GB Token authentication for sensitive operations
+✅ **Backward Compatible**: Zero migration effort - existing code continues to work
+✅ **Automatic Routing**: Smart endpoint selection based on authentication status
+✅ **Simple Configuration**: One-line addition to enable secure authentication
+✅ **Flexible**: Use token authentication only when needed
+✅ **Transparent**: No code changes beyond initial configuration
 
 ---
 
 ## ⭐ Acknowledgments
 
-We thank our development community for their feedback and contributions that made this release possible. Special thanks to developers who tested the beta versions and provided valuable insights for improving the TypeScript integration and developer experience.
+We thank our development community for their feedback on security features.
 
 ---
 
-**Ready to upgrade?** Start with our [Migration Guide](./MIGRATION.md).
+**Ready to upgrade?** Simply update your dependency to v3.1.0. No migration required!
 
-*For technical support during migration, contact support@gameball.co*
+*For technical support, contact us at support@gameball.co*

@@ -38,7 +38,8 @@ function AppContent() {
         apiKey: "your-api-key-here",
         lang: "en",
         shop: "your-shop-id",
-        platform: "your-platform-id"
+        platform: "your-platform-id",
+        // sessionToken: "your-session-token" // Optional: Enable secure authentication (v3.1.0+)
       }
       await gameballApp.init(config)
 
@@ -95,14 +96,34 @@ function AppContent() {
           }
         }
 
+          // Example 1: Send event with current global session token
           gameballApp.sendEvent(event, eventCallback)
+
+          // Example 2: Send event with specific session token (updates global token)
+          // gameballApp.sendEvent(event, eventCallback, 'session-token')
+
+          // Example 3: Send anonymous event (clears global token)
+          // gameballApp.sendEvent(event, eventCallback, null)
+
+          // Note: sessionToken parameter always updates the global token
         },
         onError: (error) => {
           console.log('Customer initialization failed:', error)
         }
       }
 
+      // Example 1: Initialize customer with default global session token (if set in config)
       await gameballApp.initializeCustomer(customer, callback)
+
+      // Example 2: Initialize customer with specific session token (updates global token)
+      // await gameballApp.initializeCustomer(customer, callback, 'user-specific-token')
+
+      // Example 3: Initialize customer without authentication (clears global token)
+      // await gameballApp.initializeCustomer(customer, callback, null)
+
+      // Note: The sessionToken parameter always updates the global token.
+      // If you provide a token, it becomes the new global token.
+      // If you don't provide it (undefined), the global token is cleared.
     }
 
     initializeGameball()

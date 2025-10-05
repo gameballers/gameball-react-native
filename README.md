@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -149,6 +149,48 @@ The SDK provides the following public methods:
 
 ## Advanced Usage
 
+### Per-Request Session Token Override (v3.1.0+)
+
+Override or clear the session token for individual API calls:
+
+```typescript
+const gameballApp = GameballApp.getInstance();
+
+// Initialize customer with a different session token
+await gameballApp.initializeCustomer(
+  {
+    customerId: 'customer-123',
+    email: 'user@example.com'
+  },
+  undefined,  // callback (optional)
+  'user-specific-token'  // Override global token
+);
+
+// Send an event without authentication (clear token for this request)
+await gameballApp.sendEvent(
+  {
+    customerId: 'customer-123',
+    events: {
+      page_view: {
+        page: 'home'
+      }
+    }
+  },
+  undefined,  // callback (optional)
+  null  // Clear token for this request
+);
+
+// Show profile with custom token
+await gameballApp.showProfile(
+  {
+    customerId: 'customer-123'
+  },
+  'session-token'
+);
+```
+
+**Important Note:** The `sessionToken` parameter **always updates the global session token** when a method is called. If you provide a token, it becomes the new global token. If you don't provide the parameter (undefined), the global token is cleared. Each method call updates the global token, which is then used for subsequent API calls until changed again.
+
 ### Customer Attributes
 ```typescript
 const customerAttributes = {
@@ -233,6 +275,7 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `lang` | string | ✅ | Language code ('en' or 'ar') |
 | `shop` | string | ❌ | Shop identifier |
 | `platform` | string | ❌ | Platform identifier |
+| `sessionToken` | string | ❌ | Session Token for secure authentication (enables automatic v4.1 endpoint routing) |
 | `apiPrefix` | string | ❌ | Custom API base URL |
 
 ### InitializeCustomerRequest
@@ -339,7 +382,7 @@ Add to your `android/app/proguard-rules.pro`:
 ## Support
 
 - 📧 **Email**: support@gameball.co
-- 📖 **Documentation**: [https://docs.gameball.co](https://docs.gameball.co)
+- 📖 **Documentation**: [https://developer.gameball.co/](https://developer.gameball.co/)
 - 🐛 **Issues**: [GitHub Issues](https://github.com/gameballers/gameball-react-native/issues)
 
 ## License
