@@ -1,4 +1,129 @@
-# Migration Guide: Gameball React Native SDK v2.x → v3.0.0
+# Migration Guide: Gameball React Native SDK
+
+This guide provides migration instructions for upgrading between major versions of the Gameball React Native SDK.
+
+---
+
+## Table of Contents
+
+- [v3.0.0 → v3.1.0](#migration-guide-v300--v310)
+- [v2.x → v3.0.0](#migration-guide-v2x--v300)
+
+---
+
+## Migration Guide: v3.0.0 → v3.1.0
+
+Version 3.1.0 introduces security enhancements. This is a **minor update** with no breaking changes.
+
+### Overview of Changes
+
+#### 🔒 What's New
+- **Session Token authentication** for enhanced API security
+- **Per-request session token override** for flexible authentication control on individual API calls
+- **Automatic secure endpoint routing** when session token is provided
+
+### Update Dependencies
+
+Update your dependency to v3.1.0:
+
+```bash
+npm install react-native-gameball@^3.1.0
+# or
+yarn add react-native-gameball@^3.1.0
+```
+
+### Optional: Enable Session Token Authentication
+
+If you want to use Session Token authentication, simply add it to your configuration:
+
+```typescript
+const gameballConfig = {
+  apiKey: 'your-api-key',
+  lang: 'en',
+  sessionToken: 'your-secure-session-token'  // Optional: Add for secure authentication
+};
+
+await GameballApp.getInstance().init(gameballConfig);
+```
+
+When session token is provided:
+- API requests automatically route to secure v4.1 endpoints
+- `X-GB-TOKEN` header is included in authenticated requests
+- Enhanced security for customer data
+
+### New: Per-Request Session Token Override
+
+You can now override or clear the session token for individual API calls:
+
+```typescript
+const gameballApp = GameballApp.getInstance();
+
+// Override session token for a specific customer initialization
+await gameballApp.initializeCustomer(
+  {
+    customerId: 'customer-123',
+    email: 'user@example.com'
+  },
+  undefined,  // callback (optional)
+  'user-specific-token'  // Override global token
+);
+
+// Clear session token for a specific event (anonymous tracking)
+await gameballApp.sendEvent(
+  {
+    customerId: 'customer-123',
+    events: {
+      page_view: {
+        page: 'home'
+      }
+    }
+  },
+  undefined,  // callback (optional)
+  null  // Clear token for this request
+);
+
+// Show profile with different authentication
+await gameballApp.showProfile(
+  {
+    customerId: 'customer-123'
+  },
+  'session-token'
+);
+```
+
+**Important Note:** The `sessionToken` parameter **always updates the global session token** when a method is called. If you provide a token, it becomes the new global token. If you don't provide the parameter (undefined), the global token is cleared. Each method call updates the global token, which is then used for subsequent API calls until changed again.
+
+**Use Cases:**
+- Multi-user scenarios where different users need different authentication
+- Anonymous actions while maintaining global authentication
+- Temporary authentication overrides for specific operations
+
+### Migration Checklist
+
+- [ ] Update package dependency to ^3.1.0
+- [ ] Run `npm install` or `yarn install`
+- [ ] (Optional) Add `sessionToken` to your GameballConfig if needed
+- [ ] Verify all SDK functionality works correctly
+- [ ] Test event tracking
+- [ ] Test profile widget displays correctly
+
+### Benefits After Migration
+
+After upgrading to v3.1.0, you'll benefit from:
+
+✅ **Optional Enhanced Security**: Session Token authentication when needed
+
+✅ **Per-Request Control**: Override or clear tokens for individual API calls
+
+✅ **Flexible Authentication**: Support multi-user scenarios and anonymous actions
+
+✅ **Automatic Secure Routing**: SDK automatically uses secure endpoints when token is provided
+
+✅ **Backward Compatible**: Existing code continues to work without changes
+
+---
+
+## Migration Guide: v2.x → v3.0.0
 
 This guide helps you migrate from v2.x to v3.0.0 with modern React Native architecture and enhanced TypeScript features.
 

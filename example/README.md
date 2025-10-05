@@ -1,12 +1,13 @@
 # Gameball React Native SDK - Example App
 
-This example demonstrates how to integrate and use the Gameball React Native SDK v3.0.0 in a React Native application.
+This example demonstrates how to integrate and use the Gameball React Native SDK v3.1.0 in a React Native application.
 
 ## Features Demonstrated
 
 - 🚀 **SDK Initialization** - Initialize the Gameball SDK with configuration
+- 🔒 **Session Token Authentication** - Secure API authentication (v3.1.0+)
 - 👤 **Customer Management** - Initialize customers with attributes
-- 📊 **Event Tracking** - Track custom events
+- 📊 **Event Tracking** - Track custom events with flexible authentication
 - 🎁 **Profile Widget** - Display customer loyalty profiles
 
 ## Getting Started
@@ -53,7 +54,8 @@ const gameballApp = GameballApp.getInstance()
 const config: GameballConfig = {
   apiKey: "your-api-key",
   lang: "en",
-  apiPrefix: "https://api.alpha.gameball.app"
+  apiPrefix: "https://api.alpha.gameball.app",
+  sessionToken: "your-session-token" // Optional: v3.1.0+ for secure authentication
 }
 await gameballApp.init(config)
 ```
@@ -94,7 +96,14 @@ const event: Event = {
   }
 }
 
+// Send event with current global session token
 await gameballApp.sendEvent(event, eventCallback)
+
+// Or override with specific token (updates global token)
+// await gameballApp.sendEvent(event, eventCallback, 'user-token')
+
+// Or send anonymously (clears global token)
+// await gameballApp.sendEvent(event, eventCallback, null)
 ```
 
 ### 4. Profile Widget Display

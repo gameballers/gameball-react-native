@@ -4,6 +4,34 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [3.1.0] - 2025-11-05 🔒
+
+> **Security Release**: Token-based authentication with per-request override support
+
+### 🔒 Security
+- 🛡️ Added Session Token authentication mechanism for secure API communication
+- 🔐 Optional `sessionToken` parameter in `GameballConfig` for global token-based authentication
+- 🎯 Per-request session token override support for flexible authentication control
+- 🔄 Automatic secure endpoint routing (API v4.0 → v4.1) when session token is provided
+- 📡 `X-GB-TOKEN` header added to requests when using session token authentication
+
+### ✨ Added
+- 🎯 Optional `sessionToken` parameter added to `initializeCustomer()` method
+- 🎯 Optional `sessionToken` parameter added to `sendEvent()` method
+- 🎯 Optional `sessionToken` parameter added to `showProfile()` method
+- 🔄 Per-request token override allows temporary authentication changes without affecting global state
+- ♻️ Passing `null` as sessionToken clears the token for that specific request
+
+### 🔧 Internal Changes
+- 🔧 Added conditional endpoint routing logic for API version selection
+- 📊 Added API version constants (`API_V4_0`, `API_V4_1`) for version management
+- 🎨 Session token now stored as instance variable for flexible per-request control
+
+### 🐛 Fixed
+- 🔧 Updated `PushProvider` enum to follow TypeScript lowerCamelCase convention (`firebase`, `huawei`)
+
+---
+
 ## [3.0.0] - 2025-09-29 🎉
 
 > **Major Release**: Complete SDK modernization with breaking API changes for React Native best practices
