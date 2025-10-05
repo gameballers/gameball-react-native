@@ -7,6 +7,8 @@ export const API_ENDPOINTS = {
   BASE_URL: 'https://api.gameball.co',
   WIDGET_BASE_URL: 'https://m.gameball.app',
   BOT_SETTINGS: '/api/v1.0/Bots/BotSettings?c=mobile',
+  API_V4_0: '/api/v4.0/integrations',
+  API_V4_1: '/api/v4.1/integrations',
   INTEGRATIONS: '/api/v4.0/integrations',
   CUSTOMERS: '/customers',
   EVENTS: '/events',
