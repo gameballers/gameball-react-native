@@ -30,6 +30,7 @@ export class GameballApp {
   private config: GameballConfig | null = null;
   private isInitialized: boolean = false;
   private mainColor: string | null = null;
+  private sessionToken: string | null = null;
 
   // React Native specific properties
   private readonly sdkVersion = package_json.version;
@@ -58,6 +59,7 @@ export class GameballApp {
     try {
       this.config = config;
       this.apiKey = config.apiKey;
+      this.sessionToken = config.sessionToken || null;
 
       // Fetch bot settings
       await this.fetchBotSettings();
@@ -83,14 +85,21 @@ export class GameballApp {
    * Initialize a customer with Gameball
    * @param request - Customer initialization request
    * @param callback - Optional callback for backward compatibility
+   * @param sessionToken - Optional session token for this request.
+   *                       If provided, overrides the global sessionToken.
+   *                       If not provided (undefined), clears the global sessionToken.
    * @returns Promise with initialization response
    */
   async initializeCustomer(
     request: InitializeCustomerRequest,
-    callback?: Callback<InitializeCustomerResponse>
+    callback?: Callback<InitializeCustomerResponse>,
+    sessionToken?: string | null
   ): Promise<InitializeCustomerResponse> {
     try {
       this.ensureInitialized();
+
+      // Override or clear sessionToken - always update on every call
+      this.sessionToken = sessionToken || null;
 
       // Validate the request - any validation errors will be caught and trigger callback
       this.validateCustomerRequest(request);
@@ -123,14 +132,21 @@ export class GameballApp {
    * Send an event to Gameball
    * @param event - Event data to send
    * @param callback - Optional callback for backward compatibility
+   * @param sessionToken - Optional session token for this request.
+   *                       If provided, overrides the global sessionToken.
+   *                       If not provided (undefined), clears the global sessionToken.
    * @returns Promise with success status
    */
   async sendEvent(
     event: Event,
-    callback?: Callback<boolean>
+    callback?: Callback<boolean>,
+    sessionToken?: string | null
   ): Promise<boolean> {
     try {
       this.ensureInitialized();
+
+      // Override or clear sessionToken - always update on every call
+      this.sessionToken = sessionToken || null;
 
       // Use the event data directly as it now matches the expected structure
       await this.makeRequest(API_ENDPOINTS.EVENTS, event);
@@ -150,9 +166,15 @@ export class GameballApp {
   /**
    * Show the Gameball profile widget
    * @param request - Profile display configuration
+   * @param sessionToken - Optional session token for this request.
+   *                       If provided, overrides the global sessionToken.
+   *                       If not provided (undefined), clears the global sessionToken.
    */
-  async showProfile(request: ShowProfileRequest): Promise<void> {
+  async showProfile(request: ShowProfileRequest, sessionToken?: string | null): Promise<void> {
     this.ensureInitialized();
+
+    // Override or clear sessionToken - always update on every call
+    this.sessionToken = sessionToken || null;
 
     // Initialize the widget with the SDK configuration
     await GameballWidget.init({
@@ -160,6 +182,7 @@ export class GameballApp {
       lang: this.config?.lang || 'en',
       shop: this.config?.shop,
       platform: this.config?.platform,
+      sessionToken: this.sessionToken || undefined,
       widgetUrlPrefix: request.widgetUrlPrefix || API_ENDPOINTS.WIDGET_BASE_URL,
       customerId: request.customerId,
       openDetail: request.openDetail,
@@ -283,7 +306,8 @@ export class GameballApp {
     if (endpoint === API_ENDPOINTS.BOT_SETTINGS) {
       url = `${baseUrl}${endpoint}`;
     } else {
-      url = `${baseUrl}${API_ENDPOINTS.INTEGRATIONS}${endpoint}`;
+      const apiVersion = this.sessionToken ? API_ENDPOINTS.API_V4_1 : API_ENDPOINTS.API_V4_0;
+      url = `${baseUrl}${apiVersion}${endpoint}`;
     }
 
     const headers: GameballSDKHeadersType = {
@@ -293,6 +317,10 @@ export class GameballApp {
       'SDKVersion': this.sdkVersion,
       'X-GB-Agent': this.userAgent,
     };
+
+    if (this.sessionToken) {
+      (headers as any)['X-GB-TOKEN'] = this.sessionToken;
+    }
 
     const requestOptions: RequestInit = {
       method,

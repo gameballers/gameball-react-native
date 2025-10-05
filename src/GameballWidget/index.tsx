@@ -31,6 +31,7 @@ type initFunctionParams = {
   lang: string;
   shop?: string;
   platform?: string;
+  sessionToken?: string;
   openDetail?: string;
   apiPrefix?: string;
   widgetUrlPrefix?: string;
@@ -49,6 +50,7 @@ class GameballWidget extends React.Component<Props, State> {
   static customerId: string = '';
   static shop?: string = '';
   static platform?: string = '';
+  static sessionToken?: string = '';
   static openDetail?: string = '';
   static hideNavigation?: boolean = false;
   static modal?: boolean = true;
@@ -72,6 +74,7 @@ class GameballWidget extends React.Component<Props, State> {
     lang,
     shop,
     platform,
+    sessionToken,
     openDetail,
     apiPrefix = API_ENDPOINTS.BASE_URL,
     widgetUrlPrefix = API_ENDPOINTS.WIDGET_BASE_URL,
@@ -99,6 +102,9 @@ class GameballWidget extends React.Component<Props, State> {
     // Set optional properties conditionally
     if (customerId) {
       GameballWidget.customerId = customerId;
+    }
+    if (sessionToken) {
+      GameballWidget.sessionToken = sessionToken;
     }
     if (mainColor) {
       GameballWidget.mainColor = mainColor;
@@ -196,6 +202,7 @@ class GameballWidget extends React.Component<Props, State> {
       lang,
       shop,
       platform,
+      sessionToken,
       openDetail,
       hideNavigation,
       modal,
@@ -208,6 +215,7 @@ class GameballWidget extends React.Component<Props, State> {
       `playerId=${customerId}&apiKey=${apiKey}&lang=${lang}` +
       `${shop ? `&shop=${shop}` : ''}` +
       `${platform ? `&platform=${platform}` : ''}` +
+      `${sessionToken ? `&sessionToken=${sessionToken}` : ''}` +
       `&os=${Platform.OS}` +
       `&sdk=React/${package_json.version}` +
       `${mainColor ? `&main=${mainColor}` : ''}` +

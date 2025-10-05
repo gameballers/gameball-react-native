@@ -13,6 +13,7 @@ export interface GameballConfig {
   lang: string;
   shop?: string;
   platform?: string;
+  sessionToken?: string;
   apiPrefix?: string;
 }
 
