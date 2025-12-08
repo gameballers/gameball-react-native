@@ -59,7 +59,8 @@ export interface Event {
 }
 
 export interface ShowProfileRequest {
-  customerId: string;
+  /** Optional customer identifier. When not provided, opens the guest view */
+  customerId?: string;
   showCloseButton?: boolean;
   openDetail?: string;
   hideNavigation?: boolean;
