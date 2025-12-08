@@ -47,7 +47,8 @@ class GameballWidget extends React.Component<Props, State> {
   static widgetUrlPrefix: string = '';
   static apiKey: string = '';
   static lang: string = '';
-  static customerId: string = '';
+  /** Optional customer identifier. When not provided, opens the guest view */
+  static customerId: string | null = null;
   static shop?: string = '';
   static platform?: string = '';
   static sessionToken?: string = '';
@@ -97,12 +98,10 @@ class GameballWidget extends React.Component<Props, State> {
       hideNavigation,
       modal,
       showCloseButton,
+      customerId: customerId ?? null,
     });
 
     // Set optional properties conditionally
-    if (customerId) {
-      GameballWidget.customerId = customerId;
-    }
     if (sessionToken) {
       GameballWidget.sessionToken = sessionToken;
     }
@@ -212,7 +211,7 @@ class GameballWidget extends React.Component<Props, State> {
     const mainColor = GameballWidget.mainColor;
 
     const params =
-      `customerId=${customerId}&apiKey=${apiKey}&lang=${lang}` +
+      `customerId=${customerId ?? ''}&apiKey=${apiKey}&lang=${lang}` +
       `${shop ? `&shop=${shop}` : ''}` +
       `${platform ? `&platform=${platform}` : ''}` +
       `${sessionToken ? `&sessionToken=${sessionToken}` : ''}` +
