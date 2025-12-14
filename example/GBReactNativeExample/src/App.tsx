@@ -86,6 +86,7 @@ function AppContent() {
         const eventCallback: Callback<boolean> = {
           onSuccess: async (res) => {
             console.log("event sent")
+            // Authenticated mode
             await gameballApp.showProfile({
                 customerId: "your-customer-id",
                 closeButtonColor: "#FF0000",
@@ -93,6 +94,12 @@ function AppContent() {
                 openDetail: "achievements",
                 hideNavigation: false
               })
+
+            // Guest mode example (v3.1.1+) - no customer ID required
+            // await gameballApp.showProfile({
+            //     showCloseButton: true,
+            //     closeButtonColor: "#4CAF50"
+            //   })
           }
         }
 

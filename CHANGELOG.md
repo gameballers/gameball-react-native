@@ -4,6 +4,25 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [3.1.1] - 2025-12-15 🔧
+
+> **Patch Release**: Guest mode support for profile widget
+
+### 🐛 Fixed
+- 🎁 **Guest Mode Support**: Profile widget can now be displayed without customer authentication
+- 🔓 **Optional Customer ID**: `ShowProfileRequest.customerId` is now optional, defaulting to `null` for guest mode
+
+### 🔄 Changed
+- 🏗️ **ShowProfileRequest**: No longer requires customer ID - supports guest mode scenarios
+- 📝 **Widget URL Construction**: Enhanced to support both authenticated and guest modes
+
+### 🛠️ Developer Experience
+- ⚡ **Simpler API**: Show profile widget without customer ID for guest mode
+- 🎯 **Flexible Usage**: Support for preview/showcase scenarios before user registration
+- 📖 **Better Documentation**: Clear examples for both guest and authenticated modes
+
+---
+
 ## [3.1.0] - 2025-11-05 🔒
 
 > **Security Release**: Token-based authentication with per-request override support
