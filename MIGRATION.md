@@ -6,8 +6,79 @@ This guide provides migration instructions for upgrading between major versions 
 
 ## Table of Contents
 
+- [v3.1.0 → v3.1.1](#migration-guide-v310--v311)
 - [v3.0.0 → v3.1.0](#migration-guide-v300--v310)
 - [v2.x → v3.0.0](#migration-guide-v2x--v300)
+
+---
+
+## Migration Guide: v3.1.0 → v3.1.1
+
+Version 3.1.1 adds guest mode support for the profile widget. This is a **patch update** with no breaking changes.
+
+### Overview of Changes
+
+#### 🐛 What's Fixed
+- **Guest mode support** - Profile widget can now be displayed without customer authentication
+- **Optional customer ID** - `ShowProfileRequest.customerId` is now optional
+
+### Update Dependencies
+
+Update your dependency to v3.1.1:
+
+```bash
+npm install react-native-gameball@^3.1.1
+# or
+yarn add react-native-gameball@^3.1.1
+```
+
+### No Migration Required
+
+Your existing v3.1.0 and v3.0.0 code continues to work without any changes.
+
+### Guest Mode Enhancement (Optional)
+
+#### Before (v3.1.0)
+```typescript
+// Customer ID was required
+const request = {
+  customerId: 'customer_123'  // Required
+};
+await gameballApp.showProfile(request);
+```
+
+#### After (v3.1.1)
+```typescript
+// Customer ID is now optional
+
+// Authenticated mode
+const request = {
+  customerId: 'customer_123'  // Optional
+};
+await gameballApp.showProfile(request);
+
+// Guest mode - no customer ID
+const guestRequest = {
+  showCloseButton: true
+};
+await gameballApp.showProfile(guestRequest);
+```
+
+#### Conditional Widget Display
+
+Show guest mode for unauthenticated users:
+
+```typescript
+const showLoyaltyWidget = async () => {
+  const customerId = getCustomerId(); // Your method to get customer ID
+
+  const profileRequest = customerId
+    ? { customerId }
+    : { showCloseButton: true }; // Guest mode
+
+  await gameballApp.showProfile(profileRequest);
+};
+```
 
 ---
 

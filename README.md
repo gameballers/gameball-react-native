@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -120,9 +120,11 @@ try {
 ```
 
 ### 4. Show Profile Widget
+
 ```typescript
 import { GameballApp } from 'react-native-gameball';
 
+// Authenticated mode
 const profileRequest = {
   customerId: 'unique-customer-id',
   openDetail: 'achievements', // optional: 'profile', 'achievements', 'rewards'
@@ -135,6 +137,20 @@ try {
 } catch (error) {
   console.error('Failed to show profile:', error);
 }
+```
+
+#### Guest Mode (v3.1.1+)
+
+Display the profile widget without customer authentication:
+
+```typescript
+// Guest mode - no customer ID required
+const guestRequest = {
+  showCloseButton: true,
+  closeButtonColor: '#4CAF50'
+};
+
+await GameballApp.getInstance().showProfile(guestRequest);
 ```
 
 ## API Methods
