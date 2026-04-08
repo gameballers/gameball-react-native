@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-3.1.1-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-3.1.2-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -314,7 +314,7 @@ GameballApp.getInstance().initializeCustomer(request, {
 ### ShowProfileRequest
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `customerId` | string | ✅ | Customer identifier |
+| `customerId` | string | ❌ | Customer identifier (optional since v3.1.1 for guest mode) |
 | `showCloseButton` | boolean | ❌ | Show close button in widget |
 | `openDetail` | string | ❌ | Widget section to open ('profile', 'achievements', 'rewards') |
 | `hideNavigation` | boolean | ❌ | Hide widget navigation |

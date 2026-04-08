@@ -6,9 +6,40 @@ This guide provides migration instructions for upgrading between major versions 
 
 ## Table of Contents
 
+- [v3.1.1 → v3.1.2](#migration-guide-v311--v312)
 - [v3.1.0 → v3.1.1](#migration-guide-v310--v311)
 - [v3.0.0 → v3.1.0](#migration-guide-v300--v310)
 - [v2.x → v3.0.0](#migration-guide-v2x--v300)
+
+---
+
+## Migration Guide: v3.1.1 → v3.1.2
+
+Version 3.1.2 fixes widget loading delays and replaces the profile widget's modal with a custom animated implementation. This is a **patch update** with no breaking changes.
+
+### Overview of Changes
+
+#### 🐛 What's Fixed
+- **Widget loading delay** - Fixed `srcdoc` iframe blocking caused by `about:blank` origin not being whitelisted
+- **Fresher content** - Widget WebView now reloads on re-open
+
+#### 🔄 What Changed
+- **Custom animated modal** - Profile widget now uses a custom `Animated` slide-up modal instead of `react-native-modal`
+- **Lazy WebView rendering** - Widget is not rendered until first open
+
+### Update Dependencies
+
+Update your dependency to v3.1.2:
+
+```bash
+npm install react-native-gameball@^3.1.2
+# or
+yarn add react-native-gameball@^3.1.2
+```
+
+### No Migration Required
+
+Your existing v3.1.1, v3.1.0, and v3.0.0 code continues to work without any changes.
 
 ---
 
