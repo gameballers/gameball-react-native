@@ -29,6 +29,7 @@ export const WEBVIEW_CONFIG = {
   ALLOWED_ORIGINS: [
     'https://m.gameball.app*',
     'http://m.gameball.app*',
+    'about:*',
     'intent://*',
   ],
 } as const;

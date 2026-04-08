@@ -6,13 +6,16 @@ import {
   TouchableOpacity,
   Platform,
   Share,
+  Animated,
+  Dimensions,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
-import Modal from 'react-native-modal';
 import styles from './styles';
 import { LanguageUtils } from './languageUtils';
 import { API_ENDPOINTS, WEBVIEW_CONFIG } from '../constants';
 const package_json = require('../../package.json');
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Props {
   modal?: boolean;
@@ -24,7 +27,8 @@ interface Props {
 interface State {
   api: string;
   refreshing: boolean;
-  showModal: boolean;
+  visible: boolean;
+  hasBeenOpened: boolean;
 }
 type initFunctionParams = {
   apiKey: string;
@@ -60,6 +64,8 @@ class GameballWidget extends React.Component<Props, State> {
   static closeButtonColor: string | null = null;
 
   private _isMounted: boolean = false;
+  private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
+  private _webViewRef: any = React.createRef();
 
   constructor(props: Props) {
     super(props);
@@ -67,7 +73,8 @@ class GameballWidget extends React.Component<Props, State> {
   state: State = {
     api: '',
     refreshing: false,
-    showModal: false,
+    visible: false,
+    hasBeenOpened: false,
   };
 
   static async init({
@@ -86,7 +93,6 @@ class GameballWidget extends React.Component<Props, State> {
     showCloseButton = true,
     closeButtonColor
   }: initFunctionParams) {
-    // Configure widget properties using Object.assign for cleaner code
     Object.assign(GameballWidget, {
       apiKey,
       lang,
@@ -101,7 +107,6 @@ class GameballWidget extends React.Component<Props, State> {
       customerId: customerId ?? null,
     });
 
-    // Set optional properties conditionally
     if (sessionToken) {
       GameballWidget.sessionToken = sessionToken;
     }
@@ -136,7 +141,7 @@ class GameballWidget extends React.Component<Props, State> {
         await Share.share(
           {
             title: param.title,
-            message: [param.text, param.url].filter(Boolean).join(' '), // join text and url if both exists
+            message: [param.text, param.url].filter(Boolean).join(' '),
             url: param.url,
           },
           {
@@ -157,17 +162,16 @@ class GameballWidget extends React.Component<Props, State> {
     params: string;
     scrollEnabled: boolean;
   }) {
-    const originWhitelist = [
+    const originWhitelist: string[] = [
       ...WEBVIEW_CONFIG.ALLOWED_ORIGINS,
       ...(GameballWidget.openDetail ? [GameballWidget.openDetail] : []),
     ];
 
     return (
       <WebView
+        ref={this._webViewRef}
         scrollEnabled={scrollEnabled}
         source={{ uri: `${GameballWidget.widgetUrlPrefix}?${params}` }}
-        startInLoadingState
-        useWebKit={true}
         originWhitelist={originWhitelist}
         showsVerticalScrollIndicator={false}
         onMessage={this.onMessage}
@@ -185,13 +189,31 @@ class GameballWidget extends React.Component<Props, State> {
   }
 
   showProfile() {
-    // Check if component is mounted before calling setState
     if (this._isMounted) {
-      this.setState({ showModal: true });
-    } else {
-      // If not mounted, set initial state directly
-      this.state = { ...this.state, showModal: true };
+      if (this.state.hasBeenOpened) {
+        this._webViewRef.current?.reload();
+      }
+      this.setState({ visible: true, hasBeenOpened: true }, () => {
+        Animated.spring(this._slideAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }).start();
+      });
     }
+  }
+
+  hideProfile() {
+    Animated.timing(this._slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      if (this._isMounted) {
+        this.setState({ visible: false });
+      }
+    });
   }
 
   render() {
@@ -224,29 +246,52 @@ class GameballWidget extends React.Component<Props, State> {
     const isRtl = LanguageUtils.isRtl(lang);
     const closeButtonColor = GameballWidget.closeButtonColor || '#CECECE';
 
-    return modal ? (
-      <Modal isVisible={this.state.showModal} style={styles.modalStyle}>
-        <View style={styles.modalContainerStyle}>
-          {showCloseButton && (
-            <TouchableOpacity
-              onPress={() => this.setState({ showModal: false })}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              style={
-                isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr
-              }
-            >
-              <Image
-                source={require('../Assets/close.png')}
-                style={[styles.closeIconStyle, { tintColor: `${closeButtonColor}` }]}
+    if (modal) {
+      if (!this.state.hasBeenOpened) {
+        return null;
+      }
+
+      return (
+        <>
+          {this.state.visible && (
+            <View style={styles.overlayStyle}>
+              <TouchableOpacity
+                style={styles.backdropStyle}
+                activeOpacity={1}
+                onPress={() => this.hideProfile()}
               />
-            </TouchableOpacity>
+            </View>
           )}
-          <SafeAreaView style={styles.webviewStyle}>
-            {this.renderWidgetComponent({ params, scrollEnabled: true })}
-          </SafeAreaView>
-        </View>
-      </Modal>
-    ) : (
+          <Animated.View
+            style={[
+              styles.modalContainerStyle,
+              { transform: [{ translateY: this._slideAnim }] },
+            ]}
+            pointerEvents={this.state.visible ? 'auto' : 'none'}
+          >
+            {showCloseButton && this.state.visible && (
+              <TouchableOpacity
+                onPress={() => this.hideProfile()}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={
+                  isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr
+                }
+              >
+                <Image
+                  source={require('../Assets/close.png')}
+                  style={[styles.closeIconStyle, { tintColor: `${closeButtonColor}` }]}
+                />
+              </TouchableOpacity>
+            )}
+            <SafeAreaView style={styles.webviewStyle}>
+              {this.renderWidgetComponent({ params, scrollEnabled: true })}
+            </SafeAreaView>
+          </Animated.View>
+        </>
+      );
+    }
+
+    return (
       <SafeAreaView style={styles.flex_1}>
         {this.renderWidgetComponent({ params, scrollEnabled: false })}
       </SafeAreaView>
