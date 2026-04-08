@@ -4,6 +4,23 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [3.1.2] - 2026-04-08 🔧
+
+> **Patch Release**: Fix widget loading delay caused by srcdoc iframe blocking
+
+### 🐛 Fixed
+- ⚡ **Widget Loading Delay**: Fixed loading delay caused by `srcdoc` iframe blocking — `about:blank` origin now whitelisted
+- 🔄 **Widget Reload**: WebView now reloads on re-open to ensure fresh content
+
+### 🔄 Changed
+- 🏗️ **Custom Animated Modal**: Replaced `react-native-modal` in the profile widget with a custom slide-up modal using React Native's `Animated` API
+- 🎯 **Lazy WebView Rendering**: Widget WebView is not rendered until first open, improving initial load performance
+
+### 🛠️ Developer Experience
+- ⚡ **Faster Widget**: Eliminated iframe-related loading delays for snappier widget presentation
+
+---
+
 ## [3.1.1] - 2025-12-15 🔧
 
 > **Patch Release**: Guest mode support for profile widget

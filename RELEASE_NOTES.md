@@ -4,78 +4,39 @@ This file contains detailed release notes for the latest version. For complete v
 
 ---
 
-## Latest Release: v3.1.1
+## Latest Release: v3.1.2
 
-**Release Date**: December 15, 2025
-**Version**: 3.1.1
+**Release Date**: April 8, 2026
+**Version**: 3.1.2
 **Type**: Patch Release
 
 ---
 
 ## 🎉 What's New
 
-v3.1.1 adds guest mode support for the profile widget, allowing users to explore loyalty features before signing up. All v3.0.0 and v3.1.0 code continues to work without modifications.
+v3.1.2 fixes a widget loading delay caused by `srcdoc` iframe blocking and replaces the profile widget's modal with a custom animated implementation. All existing code continues to work without modifications.
 
-### Guest Mode Support
+### Widget Loading Fix
 
-The profile widget now works without requiring customer authentication:
+The profile widget no longer experiences loading delays caused by blocked `about:blank` iframe origins. The widget now opens instantly with a smooth spring animation.
 
-```typescript
-// Show widget without customer ID
-const guestRequest = {
-  showCloseButton: true,
-  closeButtonColor: '#4CAF50'
-};
+### Custom Animated Modal
 
-await GameballApp.getInstance().showProfile(guestRequest);
-
-// Authenticated mode
-const customerRequest = {
-  customerId: 'customer_123',
-  showCloseButton: true
-};
-
-await GameballApp.getInstance().showProfile(customerRequest);
-```
-
-### Simplified API
-
-`ShowProfileRequest.customerId` is now optional:
-
-```typescript
-// v3.1.0 - customer ID was required
-const request = { customerId: 'customer_123' };
-
-// v3.1.1 - customer ID optional
-const request = { customerId: 'customer_123' }; // Optional
-
-// Guest mode
-const guestRequest = { showCloseButton: true };
-```
+The profile widget's modal (previously using `react-native-modal`) has been replaced with a lightweight custom implementation:
+- Slide-up spring animation on open
+- Tappable backdrop to dismiss
+- Lazy WebView rendering — the widget isn't loaded until first open
+- WebView reloads on re-open to ensure fresh content
 
 ---
 
 ## 🔄 Changes
 
-- `ShowProfileRequest.customerId` is now optional
-- Profile widget supports guest mode (no customer ID)
-
----
-
-## Usage Examples
-
-**Conditional Display** - Show guest mode for unauthenticated users:
-```typescript
-const showLoyaltyWidget = async () => {
-  const customerId = getCustomerId(); // Your method
-
-  const profileRequest = customerId
-    ? { customerId }
-    : { showCloseButton: true }; // Guest mode
-
-  await gameballApp.showProfile(profileRequest);
-};
-```
+- Fixed widget loading delay caused by `srcdoc` iframe `about:blank` origin blocking
+- Replaced `react-native-modal` usage in profile widget with custom `Animated` slide-up modal
+- Widget WebView is lazily rendered on first open
+- WebView reloads on subsequent opens for fresh content
+- Added `about:*` to allowed WebView origins
 
 ---
 
@@ -91,7 +52,9 @@ const showLoyaltyWidget = async () => {
 
 ## Migration
 
-No changes required. Existing v3.1.0 and v3.0.0 code works without modifications.
+No changes required. Existing v3.1.1, v3.1.0, and v3.0.0 code works without modifications.
+
+The profile widget no longer uses `react-native-modal` internally, but the dependency is still required by in-app notifications.
 
 See [MIGRATION.md](./MIGRATION.md) for details.
 
@@ -100,9 +63,9 @@ See [MIGRATION.md](./MIGRATION.md) for details.
 ## Installation
 
 ```bash
-npm install react-native-gameball@^3.1.1
+npm install react-native-gameball@^3.1.2
 # or
-yarn add react-native-gameball@^3.1.1
+yarn add react-native-gameball@^3.1.2
 ```
 
 ---
@@ -112,6 +75,28 @@ yarn add react-native-gameball@^3.1.1
 - 📧 Email: support@gameball.co
 - 📖 Documentation: https://developer.gameball.co/
 - 🐛 Issues: https://github.com/gameballers/gameball-react-native/issues
+
+---
+
+## Previous Release: v3.1.1
+
+**Release Date**: December 15, 2025
+**Version**: 3.1.1
+**Type**: Patch Release
+
+---
+
+### What's New
+
+Gameball React Native SDK v3.1.1 adds **guest mode support** for the profile widget, allowing users to explore loyalty features before signing up.
+
+### 🐛 Fixed
+- Guest mode support — profile widget can now be displayed without customer authentication
+- `ShowProfileRequest.customerId` is now optional, defaulting to `null` for guest mode
+
+### 🛠️ Developer Experience
+- Simpler API — show profile widget without customer ID for guest mode
+- Flexible usage — support for preview/showcase scenarios before user registration
 
 ---
 
@@ -324,19 +309,19 @@ const gameballConfig = {
 
 ### npm
 ```bash
-npm install react-native-gameball@^3.1.0
+npm install react-native-gameball@^3.1.2
 npm install react-native-webview
 ```
 
 ### yarn
 ```bash
-yarn add react-native-gameball@^3.1.0
+yarn add react-native-gameball@^3.1.2
 yarn add react-native-webview
 ```
 
 ### GitHub
 ```bash
-npm install gameballers/gameball-react-native#release-3.1.0
+npm install gameballers/gameball-react-native#release-3.1.2
 ```
 
 ---
@@ -358,6 +343,6 @@ We thank our development community for their feedback on security features.
 
 ---
 
-**Ready to upgrade?** Simply update your dependency to v3.1.0. No migration required!
+**Ready to upgrade?** Simply update your dependency to v3.1.2. No migration required!
 
 *For technical support, contact us at support@gameball.co*

@@ -1,6 +1,6 @@
 # Gameball React Native SDK - Example App
 
-This example demonstrates how to integrate and use the Gameball React Native SDK v3.1.1 in a React Native application.
+This example demonstrates how to integrate and use the Gameball React Native SDK v3.1.2 in a React Native application.
 
 ## Features Demonstrated
 
