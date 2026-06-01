@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import GameballWidget from './GameballWidget';
+import GameballLogger from './GameballLogger';
 import type {
   GameballConfig,
   InitializeCustomerRequest,
@@ -66,6 +67,20 @@ export class GameballApp {
 
       this.isInitialized = true;
 
+      GameballLogger.configure({
+        apiKey: this.apiKey,
+        baseUrl: this.config?.apiPrefix || API_ENDPOINTS.BASE_URL,
+        sdkVersion: this.sdkVersion,
+      });
+      GameballLogger.log('sdk.init', {
+        apiKey: config.apiKey,
+        lang: config.lang,
+        platform: config.platform,
+        shop: config.shop,
+        apiPrefix: config.apiPrefix,
+        sessionToken: config.sessionToken,
+      });
+
       if (__DEV__) {
         console.log('[GameballApp] SDK initialized successfully', {
           version: this.sdkVersion,
@@ -107,7 +122,10 @@ export class GameballApp {
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
 
-      const response = await this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
+      const responsePromise = this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
+      // Fire telemetry immediately after dispatching the request.
+      GameballLogger.log('sdk.initializeCustomer', request);
+      const response = await responsePromise;
 
       // Extract gameballId from response
       const result: InitializeCustomerResponse = {
@@ -149,7 +167,10 @@ export class GameballApp {
       this.sessionToken = sessionToken || null;
 
       // Use the event data directly as it now matches the expected structure
-      await this.makeRequest(API_ENDPOINTS.EVENTS, event);
+      const eventPromise = this.makeRequest(API_ENDPOINTS.EVENTS, event);
+      // Fire telemetry immediately after dispatching the request.
+      GameballLogger.log('sdk.sendEvent', event);
+      await eventPromise;
 
       callback?.onSuccess?.(true);
       return true;
@@ -197,6 +218,10 @@ export class GameballApp {
     // Create and show widget instance
     const widget = new GameballWidget({});
     widget.showProfile();
+
+    // showProfile renders a webview (never hits the backend), so log it here.
+    // Full request as-is (externalLinkCallback is a function — JSON.stringify drops it).
+    GameballLogger.log('sdk.showProfile', request);
   }
 
   /**
