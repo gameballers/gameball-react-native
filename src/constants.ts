@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   INTEGRATIONS: '/api/v4.0/integrations',
   CUSTOMERS: '/customers',
   EVENTS: '/events',
+  MOBILE_LOGS: '/mobile/logs',
 } as const;
 
 // Error Messages
