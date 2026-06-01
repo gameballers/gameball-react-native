@@ -213,6 +213,7 @@ export class GameballApp {
       closeButtonColor: request.closeButtonColor,
       mobile: request.mobile,
       email: request.email,
+      externalLinkCallback: request.externalLinkCallback,
     });
 
     // Create and show widget instance

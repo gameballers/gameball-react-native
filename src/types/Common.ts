@@ -68,6 +68,7 @@ export interface ShowProfileRequest {
   closeButtonColor?: string;
   mobile?: string;
   email?: string;
+  externalLinkCallback?: (url: string) => void;
 }
 
 export type GameballSDKHeadersType = {
