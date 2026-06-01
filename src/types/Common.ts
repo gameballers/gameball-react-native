@@ -66,6 +66,8 @@ export interface ShowProfileRequest {
   hideNavigation?: boolean;
   widgetUrlPrefix?: string;
   closeButtonColor?: string;
+  mobile?: string;
+  email?: string;
 }
 
 export type GameballSDKHeadersType = {

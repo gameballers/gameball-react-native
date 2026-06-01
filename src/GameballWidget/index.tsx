@@ -45,6 +45,8 @@ type initFunctionParams = {
   mainColor?: string;
   showCloseButton?: boolean;
   closeButtonColor?: string;
+  mobile?: string;
+  email?: string;
 };
 class GameballWidget extends React.Component<Props, State> {
   static apiPrefix: string = '';
@@ -62,6 +64,8 @@ class GameballWidget extends React.Component<Props, State> {
   static mainColor: string | null = null;
   static showCloseButton?: boolean = true;
   static closeButtonColor: string | null = null;
+  static mobile?: string = '';
+  static email?: string = '';
 
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
@@ -91,7 +95,9 @@ class GameballWidget extends React.Component<Props, State> {
     modal = true,
     mainColor,
     showCloseButton = true,
-    closeButtonColor
+    closeButtonColor,
+    mobile,
+    email
   }: initFunctionParams) {
     Object.assign(GameballWidget, {
       apiKey,
@@ -105,6 +111,8 @@ class GameballWidget extends React.Component<Props, State> {
       modal,
       showCloseButton,
       customerId: customerId ?? null,
+      mobile,
+      email,
     });
 
     if (sessionToken) {
@@ -228,6 +236,8 @@ class GameballWidget extends React.Component<Props, State> {
       hideNavigation,
       modal,
       showCloseButton,
+      mobile,
+      email,
     } = GameballWidget;
 
     const mainColor = GameballWidget.mainColor;
@@ -241,7 +251,9 @@ class GameballWidget extends React.Component<Props, State> {
       `&sdk=React/${package_json.version}` +
       `${mainColor ? `&main=${mainColor}` : ''}` +
       `${openDetail ? `&openDetail=${openDetail}` : ''}` +
-      `${hideNavigation ? `&hideNavigation=${hideNavigation}` : ''}`;
+      `${hideNavigation ? `&hideNavigation=${hideNavigation}` : ''}` +
+      `${mobile ? `&mobile=${encodeURIComponent(mobile)}` : ''}` +
+      `${email ? `&email=${encodeURIComponent(email)}` : ''}`;
 
     const isRtl = LanguageUtils.isRtl(lang);
     const closeButtonColor = GameballWidget.closeButtonColor || '#CECECE';

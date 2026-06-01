@@ -190,6 +190,8 @@ export class GameballApp {
       modal: true,
       mainColor: this.mainColor || undefined,
       closeButtonColor: request.closeButtonColor,
+      mobile: request.mobile,
+      email: request.email,
     });
 
     // Create and show widget instance
