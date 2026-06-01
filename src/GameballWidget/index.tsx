@@ -8,6 +8,7 @@ import {
   Share,
   Animated,
   Dimensions,
+  Linking,
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import styles from './styles';
@@ -47,6 +48,7 @@ type initFunctionParams = {
   closeButtonColor?: string;
   mobile?: string;
   email?: string;
+  externalLinkCallback?: (url: string) => void;
 };
 class GameballWidget extends React.Component<Props, State> {
   static apiPrefix: string = '';
@@ -66,6 +68,7 @@ class GameballWidget extends React.Component<Props, State> {
   static closeButtonColor: string | null = null;
   static mobile?: string = '';
   static email?: string = '';
+  static externalLinkCallback?: (url: string) => void;
 
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
@@ -97,7 +100,8 @@ class GameballWidget extends React.Component<Props, State> {
     showCloseButton = true,
     closeButtonColor,
     mobile,
-    email
+    email,
+    externalLinkCallback
   }: initFunctionParams) {
     Object.assign(GameballWidget, {
       apiKey,
@@ -113,6 +117,7 @@ class GameballWidget extends React.Component<Props, State> {
       customerId: customerId ?? null,
       mobile,
       email,
+      externalLinkCallback,
     });
 
     if (sessionToken) {
@@ -163,6 +168,21 @@ class GameballWidget extends React.Component<Props, State> {
     }
   }
 
+  // Navigation handling — consumes every intercepted link (nothing loads in-widget):
+  //   1) gbExternalBrowser=true → device browser (flag outranks the callback)
+  //   2) else if externalLinkCallback set → delegate to it
+  //   3) else → device browser
+  handleExternalBrowserLink(url: string): boolean {
+    if (url.includes('gbExternalBrowser=true')) {
+      Linking.openURL(url).catch(() => {});
+    } else if (GameballWidget.externalLinkCallback) {
+      GameballWidget.externalLinkCallback(url);
+    } else {
+      Linking.openURL(url).catch(() => {});
+    }
+    return true;
+  }
+
   renderWidgetComponent({
     params,
     scrollEnabled,
@@ -183,6 +203,7 @@ class GameballWidget extends React.Component<Props, State> {
         originWhitelist={originWhitelist}
         showsVerticalScrollIndicator={false}
         onMessage={this.onMessage}
+        onShouldStartLoadWithRequest={(request) => !this.handleExternalBrowserLink(request.url)}
         androidHardwareAccelerationDisabled={false}
         injectedJavaScriptBeforeContentLoaded="
         if (navigator.share == null) {
