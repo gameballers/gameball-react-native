@@ -31,3 +31,10 @@ npm run ios
 
 Everything in `src/qa-*.ts` and `src/QaPanel.tsx` exists for the QA run. An app integrating the SDK
 needs the two calls in `src/gameball.ts` and `App.tsx`, and nothing else.
+
+## About `react-native-safe-area-context`
+
+Installed here on purpose. The SDK reads the device's safe-area insets from it when an app has it,
+so messages clear the notch and the home indicator without the app doing anything. It is optional:
+without it the SDK falls back to the status-bar height on Android and to zero elsewhere, and an app
+can always pass exact insets to `<GameballInAppMessages />` instead.

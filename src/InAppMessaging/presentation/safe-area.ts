@@ -16,7 +16,14 @@ function positive(value: unknown): number {
     : 0;
 }
 
-let resolved: Insets | null = null;
+/**
+ * Resolved once, as this module is imported, and never during a render.
+ *
+ * A render must not have side effects, and this one has two: it reads a package that may not be
+ * there, and it logs when it is not. Doing that from a component's body is how React ends up
+ * warning that one component updated another while rendering.
+ */
+let resolved: Insets = resolve();
 
 /**
  * The device's safe-area insets, as well as the SDK can know them.
@@ -31,9 +38,10 @@ let resolved: Insets | null = null;
  * A host that knows better passes `insets` to `<GameballInAppMessages />`, which always wins.
  */
 export function deviceInsets(): Insets {
-  if (resolved) {
-    return resolved;
-  }
+  return resolved;
+}
+
+function resolve(): Insets {
   const fallback: Insets = {
     top: Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0,
     bottom: 0,
@@ -43,17 +51,16 @@ export function deviceInsets(): Insets {
       require('react-native-safe-area-context')?.initialWindowMetrics;
     const top = positive(metrics?.insets?.top);
     const bottom = positive(metrics?.insets?.bottom);
-    resolved = top > 0 || bottom > 0 ? { top, bottom } : fallback;
+    return top > 0 || bottom > 0 ? { top, bottom } : fallback;
   } catch {
     iamLog(
       'react-native-safe-area-context is not installed; messages fall back to the status-bar height. Pass insets to <GameballInAppMessages /> for exact placement.'
     );
-    resolved = fallback;
+    return fallback;
   }
-  return resolved;
 }
 
-/** Test seam: the insets are read once and cached for the life of the process. */
+/** Test seam: re-reads the insets after a test has changed what the platform reports. */
 export function resetDeviceInsetsForTests(): void {
-  resolved = null;
+  resolved = resolve();
 }
