@@ -24,11 +24,40 @@ type Listener = (current: PresentedMessage | null) => void;
  * frame the customer could actually have seen — the same rule the other SDKs use, and it is also
  * when auto-dismiss starts.
  */
+export interface ReactMessagePresenterOptions {
+  /** The screen's current orientation, when the host can report it. */
+  orientation?: () => 'portrait' | 'landscape' | undefined;
+}
+
 export class ReactMessagePresenter implements MessagePresenter {
   private current: PresentedMessage | null = null;
   private listener: Listener | null = null;
   private autoDismiss: ReturnType<typeof setTimeout> | null = null;
   private shown = false;
+  private readonly orientation:
+    | (() => 'portrait' | 'landscape' | undefined)
+    | null;
+
+  constructor(options: ReactMessagePresenterOptions = {}) {
+    this.orientation = options.orientation ?? null;
+  }
+
+  /**
+   * A full screen authored for one orientation waits for it rather than drawing sideways. The
+   * refusal heals on its own: rotating the device is a display opportunity, and the service
+   * retries the message it parked.
+   */
+  private orientationAllows(message: InAppMessage): boolean {
+    if (
+      message.type !== 'fullscreen' ||
+      message.orientation === 'any' ||
+      !this.orientation
+    ) {
+      return true;
+    }
+    const current = this.orientation();
+    return current === undefined || current === message.orientation;
+  }
 
   /** True while a host component is mounted. The service defers displays until it is. */
   get hasSurface(): boolean {
@@ -63,6 +92,12 @@ export class ReactMessagePresenter implements MessagePresenter {
     }
     if (!this.listener) {
       iamLog('no in-app messaging host mounted yet; deferring');
+      return false;
+    }
+    if (!this.orientationAllows(message)) {
+      iamLog(
+        `message "${message.id}" needs ${message.orientation} orientation; deferring`
+      );
       return false;
     }
     this.shown = false;

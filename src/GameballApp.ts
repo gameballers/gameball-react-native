@@ -10,6 +10,9 @@ import type {
   GameballSDKHeadersType,
 } from './types/Common';
 import { API_ENDPOINTS, ERROR_MESSAGES } from './constants';
+import { inAppMessaging } from './InAppMessaging';
+import type { StartInAppMessagingOptions } from './InAppMessaging';
+import type { InAppMessage } from './InAppMessaging/models/message';
 
 const package_json = require('../package.json');
 
@@ -61,6 +64,13 @@ export class GameballApp {
       this.apiKey = config.apiKey;
       this.sessionToken = config.sessionToken || null;
 
+      // In-app messaging shares this configuration; it opens no connection until it is started.
+      inAppMessaging.configure({
+        apiKey: config.apiKey,
+        lang: config.lang,
+        apiBaseUrl: config.apiPrefix,
+      });
+
       // Fetch bot settings
       await this.fetchBotSettings();
 
@@ -107,12 +117,21 @@ export class GameballApp {
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
 
-      const response = await this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
+      const response = await this.makeRequest(
+        API_ENDPOINTS.CUSTOMERS,
+        processedRequest
+      );
 
       // Extract gameballId from response
       const result: InitializeCustomerResponse = {
         gameballId: response.gameballId || response.id || '',
       };
+
+      // Messaging follows the identified customer; changing customer re-syncs their campaigns.
+      inAppMessaging.identified(
+        request.customerId,
+        request.customerAttributes?.preferredLanguage
+      );
 
       // Call callback if provided (backward compatibility)
       callback?.onSuccess?.(result);
@@ -148,6 +167,12 @@ export class GameballApp {
       // Override or clear sessionToken - always update on every call
       this.sessionToken = sessionToken || null;
 
+      // Every event is also a trigger. Evaluated first, so a matching message can display
+      // without waiting for the round trip.
+      for (const [name, properties] of Object.entries(event.events ?? {})) {
+        inAppMessaging.onCustomEvent(name, properties ?? {});
+      }
+
       // Use the event data directly as it now matches the expected structure
       await this.makeRequest(API_ENDPOINTS.EVENTS, event);
 
@@ -170,7 +195,10 @@ export class GameballApp {
    *                       If provided, overrides the global sessionToken.
    *                       If not provided (undefined), clears the global sessionToken.
    */
-  async showProfile(request: ShowProfileRequest, sessionToken?: string | null): Promise<void> {
+  async showProfile(
+    request: ShowProfileRequest,
+    sessionToken?: string | null
+  ): Promise<void> {
     this.ensureInitialized();
 
     // Override or clear sessionToken - always update on every call
@@ -244,7 +272,8 @@ export class GameballApp {
     }
 
     // Validate that device token and push provider are both provided or both null
-    const hasDeviceToken = request.deviceToken != null && request.deviceToken.trim() !== '';
+    const hasDeviceToken =
+      request.deviceToken != null && request.deviceToken.trim() !== '';
     const hasPushProvider = request.pushProvider != null;
 
     if (hasPushProvider && !hasDeviceToken) {
@@ -260,8 +289,8 @@ export class GameballApp {
     // Create internal request with osType and default isGuest
     const internalRequest = {
       ...request,
-      osType: this.os,  // Always set internally
-      isGuest: request.isGuest ?? false,  // Default to false if not provided
+      osType: this.os, // Always set internally
+      isGuest: request.isGuest ?? false, // Default to false if not provided
     };
 
     // If customerAttributes is null/undefined, initialize with default channel
@@ -269,18 +298,19 @@ export class GameballApp {
       return {
         ...internalRequest,
         customerAttributes: {
-          channel: 'mobile'  // Always set internally
-        }
+          channel: 'mobile', // Always set internally
+        },
       };
     }
 
     // Extract customAttributes and additionalAttributes from customerAttributes
-    const { customAttributes, additionalAttributes, ...standardAttrs } = request.customerAttributes;
+    const { customAttributes, additionalAttributes, ...standardAttrs } =
+      request.customerAttributes;
 
     // Build the processed customerAttributes object
     const processedCustomerAttributes: any = {
       channel: 'mobile', // Always set internally
-      ...standardAttrs
+      ...standardAttrs,
     };
 
     // Map customAttributes to 'custom' property
@@ -295,18 +325,57 @@ export class GameballApp {
 
     return {
       ...internalRequest,
-      customerAttributes: processedCustomerAttributes
+      customerAttributes: processedCustomerAttributes,
     };
   }
 
-  private async makeRequest(endpoint: string, data?: any, method: 'GET' | 'POST' = 'POST'): Promise<any> {
+  /**
+   * Sync campaigns and start showing in-app messages.
+   *
+   * Awaited: this platform's storage is asynchronous, and the frequency history has to be in
+   * memory before the first campaign is judged against it. Mount `<GameballInAppMessages />`
+   * once near the root of the app, or nothing has anywhere to draw.
+   */
+  async startInAppMessaging(
+    options: StartInAppMessagingOptions = {}
+  ): Promise<void> {
+    this.ensureInitialized();
+    return inAppMessaging.start(options);
+  }
+
+  /** Call on logout. Dismisses what is showing and flushes analytics; stored state is kept. */
+  stopInAppMessaging(): void {
+    inAppMessaging.stop();
+  }
+
+  get isInAppMessagingStarted(): boolean {
+    return inAppMessaging.isStarted;
+  }
+
+  /** Hold messages while the app's own modal, drawer or checkout step is open. */
+  setOverlayOpen(open: boolean): void {
+    inAppMessaging.setOverlayOpen(open);
+  }
+
+  /** Observe every selected message. Returns an unsubscribe function. */
+  onInAppMessage(listener: (message: InAppMessage) => void): () => void {
+    return inAppMessaging.onMessage(listener);
+  }
+
+  private async makeRequest(
+    endpoint: string,
+    data?: any,
+    method: 'GET' | 'POST' = 'POST'
+  ): Promise<any> {
     const baseUrl = this.config?.apiPrefix || API_ENDPOINTS.BASE_URL;
     let url: string;
-    
+
     if (endpoint === API_ENDPOINTS.BOT_SETTINGS) {
       url = `${baseUrl}${endpoint}`;
     } else {
-      const apiVersion = this.sessionToken ? API_ENDPOINTS.API_V4_1 : API_ENDPOINTS.API_V4_0;
+      const apiVersion = this.sessionToken
+        ? API_ENDPOINTS.API_V4_1
+        : API_ENDPOINTS.API_V4_0;
       url = `${baseUrl}${apiVersion}${endpoint}`;
     }
 
@@ -342,7 +411,11 @@ export class GameballApp {
 
   private async fetchBotSettings(): Promise<void> {
     try {
-      const response = await this.makeRequest(API_ENDPOINTS.BOT_SETTINGS, null, 'GET');
+      const response = await this.makeRequest(
+        API_ENDPOINTS.BOT_SETTINGS,
+        null,
+        'GET'
+      );
 
       if (response && response.response) {
         this.mainColor = response.response.botMainColor.replace('#', '');
