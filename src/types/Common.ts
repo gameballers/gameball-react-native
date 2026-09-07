@@ -5,7 +5,7 @@
 
 export enum PushProvider {
   firebase = 'Firebase',
-  huawei = 'Huawei',
+  huawei = 'Huawei'
 }
 
 export interface GameballConfig {

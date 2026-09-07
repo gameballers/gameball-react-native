@@ -91,7 +91,7 @@ class GameballWidget extends React.Component<Props, State> {
     modal = true,
     mainColor,
     showCloseButton = true,
-    closeButtonColor,
+    closeButtonColor
   }: initFunctionParams) {
     Object.assign(GameballWidget, {
       apiKey,
@@ -274,17 +274,12 @@ class GameballWidget extends React.Component<Props, State> {
                 onPress={() => this.hideProfile()}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={
-                  isRtl
-                    ? styles.closeButtonStyleRtl
-                    : styles.closeButtonStyleLtr
+                  isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr
                 }
               >
                 <Image
                   source={require('../Assets/close.png')}
-                  style={[
-                    styles.closeIconStyle,
-                    { tintColor: `${closeButtonColor}` },
-                  ]}
+                  style={[styles.closeIconStyle, { tintColor: `${closeButtonColor}` }]}
                 />
               </TouchableOpacity>
             )}
