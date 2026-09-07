@@ -14,6 +14,7 @@ import GameballApp, {
   type InAppMessage,
 } from 'react-native-gameball';
 import { config } from './config';
+import { gameballReady } from './gameball';
 import { startQaChannel, type QaChannel } from './qa-channel';
 
 /**
@@ -88,6 +89,8 @@ export function QaPanel() {
     });
 
     const identify = async (id: string) => {
+      // Nothing here may run before init has resolved; see src/gameball.ts.
+      await gameballReady;
       await app.initializeCustomer({
         customerId: id,
         customerAttributes: { preferredLanguage: cfg.lang },
@@ -95,6 +98,7 @@ export function QaPanel() {
       log(`identified ${id}`);
     };
     const fire = async (name: string, meta: Record<string, unknown>) => {
+      await gameballReady;
       log(`fire ${name} ${JSON.stringify(meta)}`);
       await app.sendEvent({
         customerId: latest.current.customer.trim(),
@@ -124,6 +128,7 @@ export function QaPanel() {
           await identify(who);
         },
         start: async (p) => {
+          await gameballReady;
           const who = (p.get('customer') ?? latest.current.customer).trim();
           await app.startInAppMessaging({
             customerId: who,
@@ -235,6 +240,7 @@ export function QaPanel() {
           id="qa-identify"
           label="Identify"
           onPress={async () => {
+            await gameballReady;
             await app.initializeCustomer({
               customerId: customer.trim(),
               customerAttributes: { preferredLanguage: config?.lang ?? 'en' },
@@ -245,7 +251,10 @@ export function QaPanel() {
         <Button
           id="qa-start"
           label="Start"
-          onPress={() => app.startInAppMessaging({ customerId: customer.trim() })}
+          onPress={async () => {
+            await gameballReady;
+            await app.startInAppMessaging({ customerId: customer.trim() });
+          }}
         />
         <Button
           id="qa-stop"
@@ -266,6 +275,7 @@ export function QaPanel() {
           id="qa-fire"
           label="Fire"
           onPress={async () => {
+            await gameballReady;
             log(`fire ${eventName.trim()} {}`);
             await app.sendEvent({
               customerId: customer.trim(),

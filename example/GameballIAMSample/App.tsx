@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -10,20 +10,10 @@ import {
 import GameballApp, { GameballInAppMessages } from 'react-native-gameball';
 import { QaPanel } from './src/QaPanel';
 import { config } from './src/config';
+// Imported for its side effect: the SDK is configured as this module loads.
+import './src/gameball';
 
 export default function App() {
-  useEffect(() => {
-    if (!config) {
-      return;
-    }
-    // Configure once, at start-up. Nothing reaches the network until a customer is identified.
-    void GameballApp.getInstance().init({
-      apiKey: config.apiKey,
-      lang: config.lang,
-      apiPrefix: config.apiBaseUrl,
-    });
-  }, []);
-
   const send = (name: string, properties: Record<string, unknown>) =>
     GameballApp.getInstance()
       .sendEvent({ customerId: config?.customerId ?? '', events: { [name]: properties } })

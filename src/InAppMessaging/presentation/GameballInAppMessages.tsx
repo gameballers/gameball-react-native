@@ -101,6 +101,18 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
         transparent
         animationType="none"
         statusBarTranslucent
+        // Every orientation, deliberately. A React Native Modal on iOS allows only portrait
+        // unless told otherwise, and it imposes that on the whole app: showing a message would
+        // rotate the customer's screen out from under them, and a landscape-only campaign would
+        // be turned away by the very rotation it asked for. What the app supports is the app's
+        // own business, declared in its Info.plist; a message must not narrow it.
+        supportedOrientations={[
+          'portrait',
+          'portrait-upside-down',
+          'landscape',
+          'landscape-left',
+          'landscape-right',
+        ]}
         // Android's own back handling closes the Modal without telling the service; the handler
         // above owns that, so this is only the required prop.
         onRequestClose={dismiss}
