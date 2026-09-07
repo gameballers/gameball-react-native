@@ -1,8 +1,8 @@
 // Modern React Native API
 import GameballApp from './GameballApp';
 import GameballWidget from './GameballWidget';
-import { GameballInAppMessages } from './InAppMessaging';
-export { GameballApp, GameballWidget, GameballInAppMessages };
+import { GameballInAppMessages, inAppMessaging } from './InAppMessaging';
+export { GameballApp, GameballWidget, GameballInAppMessages, inAppMessaging };
 export default GameballApp;
 
 // Types following React Native conventions

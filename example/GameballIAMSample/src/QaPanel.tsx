@@ -9,7 +9,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import GameballApp, { type InAppMessage } from 'react-native-gameball';
+import GameballApp, {
+  inAppMessaging,
+  type InAppMessage,
+} from 'react-native-gameball';
 import { config } from './config';
 import { startQaChannel, type QaChannel } from './qa-channel';
 
@@ -59,6 +62,31 @@ export function QaPanel() {
     );
 
     const app = GameballApp.getInstance();
+    // A driver cannot tap a simulator, so the panel observes the presenter and acts through the
+    // callbacks the view would have called. Observing is not a surface: the SDK still needs the
+    // mounted host to draw.
+    let showing: {
+      type: string;
+      buttons: { id: string }[];
+      tapSurface: () => void;
+      tapButton: (index: number) => void;
+    } | null = null;
+    const stopObserving = inAppMessaging.presenter.observe((entry) => {
+      showing = entry
+        ? {
+            type: entry.message.type,
+            buttons: entry.message.buttons,
+            tapSurface: () => entry.callbacks.onMessagePressed(),
+            tapButton: (index: number) => {
+              const button = entry.message.buttons[index];
+              if (button) {
+                entry.callbacks.onButtonPressed(button);
+              }
+            },
+          }
+        : null;
+    });
+
     const identify = async (id: string) => {
       await app.initializeCustomer({
         customerId: id,
@@ -135,6 +163,35 @@ export function QaPanel() {
         },
         purchase: async (p) =>
           fire('purchase', { price: Number(p.get('price') ?? 120) }),
+        dismiss: () => {
+          if (inAppMessaging.presenter.isShowing) {
+            inAppMessaging.presenter.dismiss();
+          }
+        },
+        'probe-dom': () => log(`probe-dom layer=${showing?.type ?? 'none'}`),
+        'tap-surface': () => {
+          if (showing) {
+            showing.tapSurface();
+          } else {
+            log('tap-surface found nothing');
+          }
+        },
+        'tap-button': (p) => {
+          const index = Number(p.get('index') ?? 0);
+          if (showing) {
+            showing.tapButton(index);
+          } else {
+            log('tap-button found nothing');
+          }
+        },
+        // Links leave for the system browser on this platform; the driver foregrounds the app.
+        'browser-close': () => log('browser-close: nothing to close on React Native'),
+        clear: async () => {
+          const storage = require('@react-native-async-storage/async-storage').default;
+          const keys: string[] = await storage.getAllKeys();
+          await storage.multiRemove(keys.filter((k) => k.startsWith('gameball_iam_')));
+          log('SDK storage cleared');
+        },
         overlay: (p) => {
           const open = p.get('open') !== '0';
           app.setOverlayOpen(open);
@@ -152,6 +209,7 @@ export function QaPanel() {
     return () => {
       console.log = nativeLog;
       off();
+      stopObserving();
       appStateSub.remove();
       clearInterval(tick);
       channel.current?.stop();

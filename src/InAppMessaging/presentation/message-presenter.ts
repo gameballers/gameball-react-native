@@ -32,6 +32,7 @@ export interface ReactMessagePresenterOptions {
 export class ReactMessagePresenter implements MessagePresenter {
   private current: PresentedMessage | null = null;
   private listener: Listener | null = null;
+  private readonly observers = new Set<Listener>();
   private autoDismiss: ReturnType<typeof setTimeout> | null = null;
   private shown = false;
   private readonly orientation:
@@ -85,6 +86,28 @@ export class ReactMessagePresenter implements MessagePresenter {
     };
   }
 
+  /**
+   * Watches what is on screen without being the surface it is drawn on.
+   *
+   * Any number of these, and none of them makes the SDK think it has somewhere to draw. It is how
+   * a host learns that a message is up — to pause a video, say — and how the QA panel drives a
+   * message it cannot tap.
+   */
+  observe(listener: Listener): () => void {
+    this.observers.add(listener);
+    listener(this.current);
+    return () => {
+      this.observers.delete(listener);
+    };
+  }
+
+  private publish(entry: PresentedMessage | null): void {
+    this.listener?.(entry);
+    for (const observer of this.observers) {
+      observer(entry);
+    }
+  }
+
   present(message: InAppMessage, callbacks: PresentCallbacks): boolean {
     if (this.current) {
       iamLog('presenter busy: a message is already showing');
@@ -120,7 +143,7 @@ export class ReactMessagePresenter implements MessagePresenter {
       },
     };
     this.current = entry;
-    this.listener(entry);
+    this.publish(entry);
     return true;
   }
 
@@ -136,7 +159,7 @@ export class ReactMessagePresenter implements MessagePresenter {
       clearTimeout(this.autoDismiss);
       this.autoDismiss = null;
     }
-    this.listener?.(null);
+    this.publish(null);
     entry.callbacks.onDismissed();
   }
 
