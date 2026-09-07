@@ -16,14 +16,18 @@ npm run ios
 
 ## What to look at
 
-- `App.tsx` — `init` at start-up, and `<GameballInAppMessages />` mounted once near the root.
-  That component is where messages are drawn; without it the SDK holds them rather than counting
-  impressions nobody could see.
+- `App.tsx` — `<GameballInAppMessages />` mounted once near the root. That component is where
+  messages are drawn; without it the SDK holds them rather than counting impressions nobody could
+  see.
+- `src/gameball.ts` — `init` at module load, and the promise it returns. `init` is asynchronous and
+  every network-facing method refuses until it resolves, so starting it from a component effect
+  leaves a window in which the app is interactive and the SDK is not ready. A child's effect runs
+  before its parent's, which is how the QA panel found that window.
 - `src/QaPanel.tsx` — identify, start, stop and fire, plus the command names the simulator driver
   sends (`ping`, `identify`, `start`, `fire`, `orientation`, `probe`, `overlay`, `purchase`).
 - `src/qa-channel.ts` — the HTTP channel to the driver: log lines out, commands in. Lines are
   buffered because iOS suspends the app mid-post when it backgrounds, which is exactly the
   evidence a session case needs to read afterwards.
 
-Everything in `src/qa-*.ts` exists for the QA run. An app integrating the SDK needs `App.tsx`'s
-two calls and nothing else.
+Everything in `src/qa-*.ts` and `src/QaPanel.tsx` exists for the QA run. An app integrating the SDK
+needs the two calls in `src/gameball.ts` and `App.tsx`, and nothing else.
