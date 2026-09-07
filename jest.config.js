@@ -6,7 +6,8 @@
  * resolving — the analytics and service suites drive 30 s batch intervals and 30 s session
  * timeouts through exactly those.
  *
- * `native` runs anything that renders, with React Native's preset as before.
+ * `native` runs anything that renders, on React Native's own preset (which moved package with
+ * 0.87: `react-native` no longer ships one at its root).
  */
 const ignore = ['<rootDir>/example/', '<rootDir>/lib/'];
 
@@ -27,7 +28,7 @@ module.exports = {
     {
       displayName: 'native',
       rootDir: __dirname,
-      preset: 'react-native',
+      preset: '@react-native/jest-preset',
       testMatch: ['<rootDir>/src/**/__tests__/**/*.test.tsx'],
       modulePathIgnorePatterns: ignore,
     },

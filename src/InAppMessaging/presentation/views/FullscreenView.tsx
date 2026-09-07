@@ -77,7 +77,7 @@ export function FullscreenView({
             source={{ uri: message.imageUrl }}
             style={
               imageOnly
-                ? StyleSheet.absoluteFillObject
+                ? styles.fill
                 : { width: '100%', flexBasis: '50%', flexGrow: 0 }
             }
             resizeMode="cover"
@@ -155,6 +155,8 @@ export function FullscreenView({
 }
 
 const styles = StyleSheet.create({
+  /** Spelled out rather than StyleSheet.absoluteFillObject, which newer React Native types drop. */
+  fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   stack: { flex: 1 },
   /** Holds the space the artwork occupies behind it, so the copy starts below the image. */
   imageSpacer: { flexBasis: '50%', flexGrow: 0 },

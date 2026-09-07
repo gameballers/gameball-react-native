@@ -8,7 +8,8 @@ export interface SessionTarget {
 
 /** The part of `AppState` this needs, so a test can drive it without React Native. */
 export interface AppStateLike {
-  currentState: AppStateStatus | null;
+  /** React Native reports `undefined` before the first state is known, and `null` on some versions. */
+  currentState: AppStateStatus | string | null | undefined;
   addEventListener(
     type: 'change',
     listener: (state: AppStateStatus) => void
@@ -30,8 +31,12 @@ export function attachAppStateSession(
   target: SessionTarget,
   appState: AppStateLike = AppState
 ): () => void {
+  // Unknown counts as active: a first resume nobody paused for is a no-op in the service,
+  // whereas a wrong pause would make the next foreground look like a new session.
   let paused =
-    appState.currentState !== null && appState.currentState !== 'active';
+    appState.currentState !== null &&
+    appState.currentState !== undefined &&
+    appState.currentState !== 'active';
 
   const subscription = appState.addEventListener('change', (state) => {
     const isActive = state === 'active';
