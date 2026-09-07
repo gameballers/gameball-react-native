@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import {
   Animated,
   I18nManager,
@@ -40,6 +40,14 @@ export function SlideupView({
   const drag = useRef(new Animated.Value(0)).current;
   const tappable = message.clickAction !== null;
 
+  const springBack = useCallback(() => {
+    Animated.spring(drag, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+    }).start();
+  }, [drag]);
+
   const responder = useMemo(
     () =>
       PanResponder.create({
@@ -57,14 +65,14 @@ export function SlideupView({
             onDismiss();
             return;
           }
-          Animated.spring(drag, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 0,
-          }).start();
+          springBack();
         },
+        // The OS can take the gesture away mid-drag — the notification shade comes down, a call
+        // arrives — and then no release ever fires. Without this the banner stays wherever the
+        // finger left it until it auto-dismisses.
+        onPanResponderTerminate: springBack,
       }),
-    [drag, fromTop, onDismiss]
+    [drag, fromTop, onDismiss, springBack]
   );
 
   return (

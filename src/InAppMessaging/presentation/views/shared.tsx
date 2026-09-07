@@ -18,8 +18,12 @@ import { MessageMetrics } from '../metrics';
 import { resolveCloseGlyphColor } from '../close-glyph';
 
 /**
- * `start` and `end` are what the composer authors in, and they mirror in Arabic. React Native's
- * Text understands them directly, so the only work is defaulting an absent value to `start`.
+ * `start` and `end` are what the composer authors in, and they mirror in Arabic.
+ *
+ * React Native does not understand either: `TextStyle['textAlign']` is physical, and the one value
+ * that follows the layout direction is `auto`. So `start` becomes `auto`, and `end` is resolved
+ * against the direction by hand — otherwise every Arabic message authored with the default
+ * alignment is flushed to the left margin while its text runs right to left.
  */
 export function textAlign(
   align: TextAlign | undefined
@@ -30,10 +34,23 @@ export function textAlign(
     case 'center':
       return align;
     case 'end':
-      return 'right';
+      return I18nManager.isRTL ? 'left' : 'right';
     default:
-      return 'left';
+      return 'auto';
   }
+}
+
+/**
+ * Where the close glyph sits on the inline-end edge — top-right in English, top-left in Arabic.
+ *
+ * React Native does not mirror a physical `right` under RTL, and the web SDK places this glyph
+ * with `inset-inline-end`, which does; without this the close button stays in the wrong corner in
+ * every RTL locale.
+ */
+export function closeInlineEnd(
+  inset: number
+): { left: number } | { right: number } {
+  return I18nManager.isRTL ? { left: inset } : { right: inset };
 }
 
 /** A close glyph drawn from two crossing bars, so the SDK ships no icon asset. */

@@ -10,7 +10,13 @@ import {
 } from 'react-native';
 import type { InAppMessage, MessageButton } from '../../models/message';
 import { MessageMetrics, ModalMetrics } from '../metrics';
-import { CloseGlyph, closeColorFor, Copy, MessageActionButton } from './shared';
+import {
+  CloseGlyph,
+  closeColorFor,
+  closeInlineEnd,
+  Copy,
+  MessageActionButton,
+} from './shared';
 
 /**
  * A centred card over a dimmed app.
@@ -207,7 +213,7 @@ export function ModalView({
               onPress={onDismiss}
               style={{
                 top: ModalMetrics.closeInset,
-                right: ModalMetrics.closeInset,
+                ...closeInlineEnd(ModalMetrics.closeInset),
               }}
             />
           ) : null}

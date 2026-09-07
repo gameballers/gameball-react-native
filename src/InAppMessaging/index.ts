@@ -35,3 +35,10 @@ export type {
   DisplayDecision,
   OnAction,
 } from './service/in-app-messaging-service';
+/**
+ * For a host that watches what is on screen: `inAppMessaging.presenter.observe(entry => …)` hands
+ * back a `PresentedMessage | null`, and naming that type is how it can be stored rather than only
+ * read inline.
+ */
+export type { PresentedMessage } from './presentation/message-presenter';
+export type { PresentCallbacks } from './presentation/presenter';

@@ -1,26 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import {
-  BackHandler,
-  Modal,
-  Platform,
-  StatusBar,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { BackHandler, Modal, Platform, StyleSheet, View } from 'react-native';
 import type { MessageButton } from '../models/message';
 import type {
   PresentedMessage,
   ReactMessagePresenter,
 } from './message-presenter';
+import { deviceInsets } from './safe-area';
 import { SlideupView } from './views/SlideupView';
 import { ModalView } from './views/ModalView';
 import { FullscreenView } from './views/FullscreenView';
 
 export interface GameballInAppMessagesProps {
   /**
-   * Safe-area insets, when the app knows them. Without a dependency the SDK cannot read the
-   * notch, so it uses the status-bar height on Android and 0 elsewhere. An app that already has
-   * `react-native-safe-area-context` should pass its insets and get exact placement.
+   * Safe-area insets, when the app knows them.
+   *
+   * Optional: the SDK reads `react-native-safe-area-context`'s start-up metrics when that package
+   * is installed, and otherwise falls back to the status-bar height on Android and 0 elsewhere.
+   * Pass these when the app's own insets are the authority — a screen that changes them, or a
+   * device the start-up read got wrong.
    */
   insets?: { top?: number; bottom?: number };
 }
@@ -66,10 +63,9 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       return null;
     }
 
-    const topInset =
-      insets?.top ??
-      (Platform.OS === 'android' ? StatusBar.currentHeight ?? 0 : 0);
-    const bottomInset = insets?.bottom ?? 0;
+    const device = deviceInsets();
+    const topInset = insets?.top ?? device.top;
+    const bottomInset = insets?.bottom ?? device.bottom;
 
     const press = (button: MessageButton | null) => {
       if (button) {

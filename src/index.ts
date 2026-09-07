@@ -35,4 +35,7 @@ export type {
   BeforeDisplay,
   DisplayDecision,
   OnAction,
+  TextAlign,
+  PresentedMessage,
+  PresentCallbacks,
 } from './InAppMessaging';

@@ -49,7 +49,7 @@ describe('GameballApiClient', () => {
       platform: 3,
       locale: 'ar',
       appVersion: '1.2.3',
-      sdkVersion: 'web/0.1.0',
+      sdkVersion: 'react-native/0.1.0',
     });
     const headers = calls[0]!.init.headers as Record<string, string>;
     expect(headers.ApiKey).toBe('KEY');

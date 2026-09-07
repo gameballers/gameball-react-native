@@ -58,7 +58,7 @@ export class GameballApiClient {
         platform: this.config.platformCode(),
         locale: this.config.lang(),
         appVersion: this.config.appVersion(),
-        sdkVersion: `web/${this.config.sdkVersion}`,
+        sdkVersion: `react-native/${this.config.sdkVersion}`,
       });
       if (!response.ok) {
         const text = await response.text();

@@ -9,7 +9,13 @@ import {
 } from 'react-native';
 import type { InAppMessage, MessageButton } from '../../models/message';
 import { FullscreenMetrics, MessageMetrics } from '../metrics';
-import { CloseGlyph, closeColorFor, Copy, MessageActionButton } from './shared';
+import {
+  CloseGlyph,
+  closeColorFor,
+  closeInlineEnd,
+  Copy,
+  MessageActionButton,
+} from './shared';
 
 /**
  * Edge to edge, covering the app.
@@ -40,6 +46,20 @@ export function FullscreenView({
   const opacity = useRef(new Animated.Value(0)).current;
   const imageOnly =
     message.layout === 'image_only' && message.imageUrl !== null;
+
+  const buttons = message.buttons.map((button, index) => (
+    <MessageActionButton
+      key={button.id}
+      index={index}
+      button={button}
+      onPress={onPress}
+      fullWidth
+      fontSize={FullscreenMetrics.buttonFontSize}
+      lineHeight={FullscreenMetrics.buttonLineHeight}
+      paddingVertical={FullscreenMetrics.buttonPaddingVertical}
+      paddingHorizontal={0}
+    />
+  ));
 
   return (
     <Animated.View
@@ -78,7 +98,13 @@ export function FullscreenView({
             style={
               imageOnly
                 ? styles.fill
-                : { width: '100%', flexBasis: '50%', flexGrow: 0 }
+                : {
+                    width: '100%',
+                    flexBasis: `${
+                      FullscreenMetrics.imageHeightFraction * 100
+                    }%`,
+                    flexGrow: 0,
+                  }
             }
             resizeMode="cover"
           />
@@ -86,8 +112,14 @@ export function FullscreenView({
       </Pressable>
 
       {imageOnly ? null : (
+        // One column, the full height of the surface — which is the box the artwork's half is
+        // measured against. Reserving that half inside a shorter column (one the buttons had
+        // already been subtracted from) left the copy starting above the image's bottom edge and
+        // painting over it, since the copy is drawn after the artwork.
         <View style={styles.stack} pointerEvents="box-none">
-          {message.imageUrl ? <View style={styles.imageSpacer} /> : null}
+          {message.imageUrl ? (
+            <View testID="gb-iam-image-spacer" style={styles.imageSpacer} />
+          ) : null}
           <ScrollView contentContainerStyle={styles.copy}>
             <Copy
               header={message.header}
@@ -100,42 +132,33 @@ export function FullscreenView({
               spacing={FullscreenMetrics.headerToBodySpacing}
             />
           </ScrollView>
+          {message.buttons.length > 0 ? (
+            <View testID="gb-iam-buttons" style={styles.buttons}>
+              {buttons}
+            </View>
+          ) : null}
         </View>
       )}
 
-      {message.buttons.length > 0 ? (
+      {imageOnly && message.buttons.length > 0 ? (
         <View
+          testID="gb-iam-buttons"
           style={[
             styles.buttons,
-            imageOnly
-              ? {
-                  position: 'absolute',
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  paddingHorizontal:
-                    FullscreenMetrics.imageOnlyButtonsPadding.horizontal,
-                  paddingBottom:
-                    FullscreenMetrics.imageOnlyButtonsPadding.bottom +
-                    bottomInset,
-                  paddingTop: 0,
-                }
-              : null,
+            {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              paddingHorizontal:
+                FullscreenMetrics.imageOnlyButtonsPadding.horizontal,
+              paddingBottom:
+                FullscreenMetrics.imageOnlyButtonsPadding.bottom + bottomInset,
+              paddingTop: 0,
+            },
           ]}
         >
-          {message.buttons.map((button, index) => (
-            <MessageActionButton
-              key={button.id}
-              index={index}
-              button={button}
-              onPress={onPress}
-              fullWidth
-              fontSize={FullscreenMetrics.buttonFontSize}
-              lineHeight={FullscreenMetrics.buttonLineHeight}
-              paddingVertical={FullscreenMetrics.buttonPaddingVertical}
-              paddingHorizontal={0}
-            />
-          ))}
+          {buttons}
         </View>
       ) : null}
 
@@ -146,7 +169,9 @@ export function FullscreenView({
           onPress={onDismiss}
           style={{
             top: FullscreenMetrics.closeInset + topInset,
-            right: FullscreenMetrics.closeInset,
+            // Mirrored by hand: React Native does not flip a physical `right` under RTL, and the
+            // web SDK places this with `inset-inline-end`, which does.
+            ...closeInlineEnd(FullscreenMetrics.closeInset),
           }}
         />
       ) : null}
@@ -159,7 +184,10 @@ const styles = StyleSheet.create({
   fill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   stack: { flex: 1 },
   /** Holds the space the artwork occupies behind it, so the copy starts below the image. */
-  imageSpacer: { flexBasis: '50%', flexGrow: 0 },
+  imageSpacer: {
+    flexBasis: `${FullscreenMetrics.imageHeightFraction * 100}%`,
+    flexGrow: 0,
+  },
   copy: {
     flexGrow: 1,
     justifyContent: 'center',

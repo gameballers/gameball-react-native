@@ -33,6 +33,8 @@ export class ReactMessagePresenter implements MessagePresenter {
   private current: PresentedMessage | null = null;
   private listener: Listener | null = null;
   private readonly observers = new Set<Listener>();
+  /** Hosts mounted while another one holds the screen, newest last. */
+  private spares: Listener[] = [];
   private autoDismiss: ReturnType<typeof setTimeout> | null = null;
   private shown = false;
   private readonly orientation:
@@ -69,19 +71,36 @@ export class ReactMessagePresenter implements MessagePresenter {
     return this.current !== null;
   }
 
-  /** Called by the host component on mount. Returns its own removal. */
+  /**
+   * Called by the host component on mount. Returns its own removal.
+   *
+   * Mounting a second host does not steal the screen from the first — but it is remembered, so
+   * that when the first unmounts the second takes over. Handing a second host a removal that did
+   * nothing left the SDK with no surface at all the moment the first one went away: the host was
+   * still on screen, `hasSurface` was false forever, and the service settled into a 250 ms retry
+   * that could never succeed.
+   */
   attach(listener: Listener): () => void {
-    if (this.listener) {
+    if (this.listener && this.listener !== listener) {
       iamLog(
         'a second in-app messaging host mounted; the first one keeps the screen'
       );
-      return () => {};
+      this.spares.push(listener);
+      return () => {
+        this.spares = this.spares.filter((l) => l !== listener);
+      };
     }
     this.listener = listener;
     listener(this.current);
     return () => {
-      if (this.listener === listener) {
-        this.listener = null;
+      if (this.listener !== listener) {
+        return;
+      }
+      const next = this.spares.pop() ?? null;
+      this.listener = next;
+      if (next) {
+        iamLog('the in-app messaging host unmounted; a spare one took over');
+        next(this.current);
       }
     };
   }

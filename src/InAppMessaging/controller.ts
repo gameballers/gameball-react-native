@@ -82,6 +82,20 @@ export class InAppMessagingController {
   private preferredLanguage: string | null = null;
   private overlayOpen = false;
   private starting: Promise<void> | null = null;
+  /**
+   * The options the most recent `start()` was given.
+   *
+   * Read through, never captured: the service is built once and its callbacks live as long as it
+   * does, so a second `start()` with different hooks has to reach them somehow. Capturing the
+   * first call's options would leave every later one silently ignored.
+   */
+  private options: StartInAppMessagingOptions = {};
+  /**
+   * Bumped by every `stop()`. `start()` is asynchronous — storage has to be read before the first
+   * campaign is judged — and a `stop()` that lands inside that window would otherwise be undone by
+   * the start it was meant to cancel.
+   */
+  private generation = 0;
   private readonly listeners = new Set<(message: InAppMessage) => void>();
 
   configure(config: InAppMessagingConfig): void {
@@ -128,6 +142,9 @@ export class InAppMessagingController {
    * against it, or a once-ever message could show a second time.
    */
   async start(options: StartInAppMessagingOptions = {}): Promise<void> {
+    // Recorded before the in-flight check: a second call's hooks are the ones the host means to
+    // use, whether or not it has to wait for the first call to finish.
+    this.options = options;
     if (this.starting) {
       return this.starting;
     }
@@ -140,6 +157,7 @@ export class InAppMessagingController {
   private async startInternal(
     options: StartInAppMessagingOptions
   ): Promise<void> {
+    const generation = this.generation;
     const api = this.api;
     if (!api || !this.config) {
       iamLog('startInAppMessaging ignored: call init({ apiKey }) first');
@@ -157,6 +175,12 @@ export class InAppMessagingController {
     if (!this.service) {
       const store = new AsyncStorageStore();
       await store.hydrate();
+      if (this.generation !== generation) {
+        iamLog(
+          'startInAppMessaging abandoned: messaging was stopped while it was starting'
+        );
+        return;
+      }
 
       this.service = new InAppMessagingService({
         source: new HttpMessageSource((id) => api.sync(id)),
@@ -175,8 +199,8 @@ export class InAppMessagingController {
         hasSurface: () => this.presenter.hasSurface,
         isHostOverlayOpen: () => this.overlayOpen,
         navigate: (route, args) => {
-          if (options.onNavigate) {
-            options.onNavigate(route, args);
+          if (this.options.onNavigate) {
+            this.options.onNavigate(route, args);
           } else {
             iamLog(
               `navigate to "${route}" ignored: pass onNavigate to startInAppMessaging()`
@@ -187,8 +211,8 @@ export class InAppMessagingController {
           if (!isOpenable(url)) {
             return false;
           }
-          if (options.openUrl) {
-            return options.openUrl(url, external);
+          if (this.options.openUrl) {
+            return this.options.openUrl(url, external);
           }
           // React Native has no in-app browser without a dependency this SDK does not take, so
           // both kinds of link leave for the system browser. An app that ships one should pass
@@ -202,8 +226,8 @@ export class InAppMessagingController {
           }
         },
         requestPushPermission: async () => {
-          if (options.requestPushPermission) {
-            return options.requestPushPermission();
+          if (this.options.requestPushPermission) {
+            return this.options.requestPushPermission();
           }
           iamLog(
             'a campaign asked for push permission but no requester was provided; pass requestPushPermission to startInAppMessaging()'
@@ -212,7 +236,7 @@ export class InAppMessagingController {
         },
         emit: (message) => {
           try {
-            options.onMessage?.(message);
+            this.options.onMessage?.(message);
           } catch (error) {
             iamLog(`onMessage threw (${String(error)})`);
           }
@@ -241,12 +265,26 @@ export class InAppMessagingController {
 
     await this.service.start({
       customerId,
-      beforeDisplay: options.beforeDisplay,
-      onAction: options.onAction,
+      // Delegates rather than the functions themselves: the service keeps whatever it is given
+      // until the customer changes, and these forward to whichever `start()` ran last.
+      beforeDisplay: (message) =>
+        this.options.beforeDisplay?.(message) ?? 'show',
+      onAction: (message, button, action) =>
+        this.options.onAction?.(message, button, action) ?? false,
     });
   }
 
+  /**
+   * Stops messaging and lets go of the customer it was running for.
+   *
+   * This is a logout boundary, as it is on the other SDKs: the next `start()` needs a customer,
+   * passed to it or identified through `initializeCustomer`, rather than quietly resuming the one
+   * who was signed in before. Stored state — frequency history, the analytics outbox, the campaign
+   * cache — is kept, so the same customer signing back in is not shown a once-ever message twice.
+   */
   stop(): void {
+    this.generation++;
+    this.starting = null;
     this.service?.stop();
     this.detachSession?.();
     this.detachOrientation?.();
@@ -254,6 +292,9 @@ export class InAppMessagingController {
     this.detachOrientation = null;
     this.presenter.dismiss();
     this.service = null;
+    this.customerId = null;
+    this.preferredLanguage = null;
+    this.options = {};
   }
 
   /** Hold messages while the app's own modal, drawer or checkout step is open. */
