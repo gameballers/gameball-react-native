@@ -12,6 +12,7 @@ Modern React Native SDK for integrating Gameball's customer engagement and loyal
 - 🎯 **Customer Management** - Initialize and manage customer profiles
 - 📊 **Event Tracking** - Track user actions and behaviors
 - 🎁 **Profile Widget** - Display customer loyalty information
+- 💬 **In-App Messages** - Slide-ups, modals and full screens from your dashboard campaigns
 - 🔧 **Modern Architecture** - Built with React Native best practices
 - 🛡️ **Type Safety** - Full TypeScript support with comprehensive type definitions
 - ⚡ **Promise-based API** - Modern async/await support with optional callbacks
@@ -162,6 +163,10 @@ The SDK provides the following public methods:
 - `showProfile(request)` - Display profile widget
 - `changeLanguage(language)` - Change SDK language
 - `getReferralCode(url)` - Extract referral code from URL
+- `startInAppMessaging(options?)` - Start showing in-app messages
+- `stopInAppMessaging()` - Stop showing them
+- `setOverlayOpen(open)` - Hold messages while your own overlay is up
+- `onInAppMessage(listener)` - Watch every message the SDK selects
 
 ## Advanced Usage
 
@@ -227,6 +232,88 @@ const customerAttributes = {
   }
 };
 ```
+
+### In-App Messages
+
+Campaigns you build in the Gameball dashboard, shown inside your app as slide-ups, modals and full
+screens. The SDK decides which message to show and when, from the triggers, targeting and frequency
+rules the campaign carries; your app supplies a place to draw and, optionally, opinions about what
+happens next.
+
+**1. Mount the surface once, near the root of your app and above your navigator.** Until it is
+mounted the SDK has nowhere to draw, and it holds messages rather than counting impressions nobody
+could see.
+
+```tsx
+import GameballApp, { GameballInAppMessages } from 'react-native-gameball';
+
+export default function App() {
+  return (
+    <>
+      <NavigationContainer>{/* your app */}</NavigationContainer>
+      <GameballInAppMessages />
+    </>
+  );
+}
+```
+
+If you already use `react-native-safe-area-context`, pass its insets and messages sit exactly clear
+of the notch and the home indicator: `<GameballInAppMessages insets={useSafeAreaInsets()} />`.
+Without them the SDK falls back to the status-bar height on Android and to zero elsewhere.
+
+**2. Start messaging once a customer is known.** Unlike the other methods this one is worth
+awaiting: it reads the frequency history out of storage before the first campaign is judged against
+it.
+
+```typescript
+await GameballApp.getInstance().init({ apiKey: 'YOUR_API_KEY' });
+await GameballApp.getInstance().initializeCustomer({ customerId: 'customer-123' });
+await GameballApp.getInstance().startInAppMessaging();
+```
+
+Every event you already send with `sendEvent` is also a trigger, so a campaign that fires on
+`add_to_cart` needs no extra call.
+
+**3. Take over the parts you care about.** Every hook is optional.
+
+```typescript
+await GameballApp.getInstance().startInAppMessaging({
+  // Deep links from a campaign's button or surface.
+  onNavigate: (route, args) => navigation.navigate(route, args),
+
+  // 'show' displays it, 'later' holds it for the next opportunity, 'discard' drops it.
+  beforeDisplay: (message) => (checkoutInProgress ? 'later' : 'show'),
+
+  // Return true to say you handled the action yourself; the SDK then does nothing further.
+  onAction: (message, button, action) => false,
+
+  // React Native ships no in-app browser, so links leave for the system browser. Pass this if you
+  // bundle one and would rather keep the customer in your app.
+  openUrl: async (url, external) => { await InAppBrowser.open(url); return true; },
+
+  // A campaign can ask for notification permission. React Native has no permission API of its own,
+  // so it asks you.
+  requestPushPermission: async () => (await requestNotifications()).granted,
+});
+```
+
+**While your own modal, drawer or checkout step is up**, tell the SDK and it will hold messages
+until you say the screen is yours again:
+
+```typescript
+GameballApp.getInstance().setOverlayOpen(true);
+// ... later
+GameballApp.getInstance().setOverlayOpen(false);
+```
+
+**Storage.** With `@react-native-async-storage/async-storage` installed, frequency history, the
+analytics outbox and the campaign cache survive a restart. Without it everything works and nothing
+persists: a once-ever message can show again after the app is killed. It is a peer dependency, not
+a requirement.
+
+**Diagnostics.** Pass `debug: true` to `init` for a running commentary prefixed `[GameballIAM]` —
+which campaign was chosen, which was passed over and why. It is on by default in development
+builds.
 
 ### Push Notifications
 ```typescript
