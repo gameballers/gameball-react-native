@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -33,6 +33,29 @@ export function ModalView({
   onScrim: () => void;
 }) {
   const { height, width } = useWindowDimensions();
+  // A React Native Image has no intrinsic size: given only a width it draws nothing at all.
+  // The artwork is already decoded by the time a message displays, so this reads from the cache
+  // and the card lays out around it on the next frame.
+  const [ratio, setRatio] = useState<number | null>(null);
+  useEffect(() => {
+    const url = message.imageUrl;
+    if (!url) {
+      return;
+    }
+    let cancelled = false;
+    Image.getSize(
+      url,
+      (w, h) => {
+        if (!cancelled && h > 0) {
+          setRatio(w / h);
+        }
+      },
+      () => {}
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [message.imageUrl]);
   const scale = useRef(new Animated.Value(0.96)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const imageOnly =
@@ -100,7 +123,7 @@ export function ModalView({
             onPress={() => onPress(null)}
             testID="gb-iam-surface"
           >
-            {message.imageUrl ? (
+            {message.imageUrl && (imageOnly || ratio !== null) ? (
               <Image
                 testID="gb-iam-image"
                 source={{ uri: message.imageUrl }}
@@ -110,7 +133,13 @@ export function ModalView({
                         width: '100%',
                         height: height * ModalMetrics.imageOnlyHeightFraction,
                       }
-                    : { width: '100%', maxHeight: stackedImageCap }
+                    : {
+                        width: '100%',
+                        // Its own shape, capped: the artwork fills the card's width without bars
+                        // until the cap takes over, which is the rule the other SDKs draw by.
+                        aspectRatio: ratio ?? 1,
+                        maxHeight: stackedImageCap,
+                      }
                 }
                 resizeMode={imageOnly ? 'cover' : 'contain'}
               />
