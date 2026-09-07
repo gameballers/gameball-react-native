@@ -15,7 +15,15 @@ const pkg = require('../../package.json');
  *
  * @type {import('@react-native/metro-config').MetroConfig}
  */
-const peers = Object.keys(pkg.peerDependencies ?? {});
+/**
+ * The app's copies of these belong to the app, not to the library.
+ *
+ * Peers, plus the packages the SDK resolves optionally at runtime: those live in the app, and a
+ * library linked from outside `node_modules` cannot walk up to find them the way an installed one
+ * would.
+ */
+const optional = ['react-native-safe-area-context'];
+const peers = [...Object.keys(pkg.peerDependencies ?? {}), ...optional];
 
 const config = {
   watchFolders: [root],
