@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppState,
+  DevSettings,
   Dimensions,
+  I18nManager,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,6 +14,7 @@ import {
 import GameballApp, {
   inAppMessaging,
   type InAppMessage,
+  type MessageButton,
 } from 'react-native-gameball';
 import { config } from './config';
 import { gameballReady } from './gameball';
@@ -68,7 +71,8 @@ export function QaPanel() {
     // mounted host to draw.
     let showing: {
       type: string;
-      buttons: { id: string }[];
+      message: InAppMessage;
+      buttons: MessageButton[];
       tapSurface: () => void;
       tapButton: (index: number) => void;
     } | null = null;
@@ -76,6 +80,7 @@ export function QaPanel() {
       showing = entry
         ? {
             type: entry.message.type,
+            message: entry.message,
             buttons: entry.message.buttons,
             tapSurface: () => entry.callbacks.onMessagePressed(),
             tapButton: (index: number) => {
@@ -88,14 +93,16 @@ export function QaPanel() {
         : null;
     });
 
-    const identify = async (id: string) => {
+    const identify = async (id: string, lang?: string) => {
       // Nothing here may run before init has resolved; see src/gameball.ts.
       await gameballReady;
+      const language = lang ?? cfg.lang;
+      app.changeLanguage(language);
       await app.initializeCustomer({
         customerId: id,
-        customerAttributes: { preferredLanguage: cfg.lang },
+        customerAttributes: { preferredLanguage: language },
       });
-      log(`identified ${id}`);
+      log(`identified ${id} in ${language}`);
     };
     const fire = async (name: string, meta: Record<string, unknown>) => {
       await gameballReady;
@@ -125,7 +132,7 @@ export function QaPanel() {
           const who = (p.get('customer') ?? latest.current.customer).trim();
           setCustomer(who);
           latest.current.customer = who;
-          await identify(who);
+          await identify(who, p.get('lang') ?? undefined);
         },
         start: async (p) => {
           await gameballReady;
@@ -174,6 +181,52 @@ export function QaPanel() {
           }
         },
         'probe-dom': () => log(`probe-dom layer=${showing?.type ?? 'none'}`),
+        // What the SDK chose to draw. A screenshot says how it looks; this says what it is, so a
+        // case can assert the layout, the button count or the copy without a human reading pixels.
+        'probe-message': () => {
+          const m = showing?.message;
+          if (!m) {
+            return log('probe-message none');
+          }
+          const s = m.style ?? {};
+          return log(
+            'probe-message ' +
+              JSON.stringify({
+                id: m.id,
+                type: m.type,
+                layout: m.layout,
+                header: m.header ?? null,
+                body: m.body ?? null,
+                image: m.imageUrl ? m.imageUrl.split('/').pop() : null,
+                icon: m.iconUrl ? m.iconUrl.split('/').pop() : null,
+                campaign: m.campaignId,
+                variation: m.variationId,
+                buttons: m.buttons.map((b) => b.text),
+                autoDismissMs: m.autoDismissMs,
+                close: m.showCloseButton,
+                click: m.clickAction?.type ?? null,
+                slide: m.slidePosition ?? null,
+                scrimDismisses: m.dismissOnScrimTap,
+                bg: s.backgroundColor ?? null,
+                headerColor: s.headerColor ?? null,
+                bodyColor: s.bodyColor ?? null,
+                rtl: I18nManager.isRTL,
+              })
+          );
+        },
+        // Arabic is the host app's business on this platform, as it is on Flutter: the SDK draws
+        // into the app's layout direction. Flipping it needs a reload, which Metro can do.
+        rtl: (p) => {
+          const on = p.get('on') !== '0';
+          if (I18nManager.isRTL === on) {
+            return log(`rtl already ${on ? 'on' : 'off'}`);
+          }
+          log(`rtl ${on ? 'on' : 'off'}; reloading`);
+          I18nManager.allowRTL(on);
+          I18nManager.forceRTL(on);
+          setTimeout(() => DevSettings.reload(), 400);
+          return undefined;
+        },
         'tap-surface': () => {
           if (showing) {
             showing.tapSurface();
