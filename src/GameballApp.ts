@@ -237,6 +237,9 @@ export class GameballApp {
     if (this.config) {
       this.config.lang = language;
     }
+    // In-app messaging keeps its own configuration, so it has to be told: without this it would
+    // go on asking for campaigns in whichever language init() was given, for the life of the app.
+    inAppMessaging.setLanguage(language);
 
     if (__DEV__) {
       console.log(`[GameballApp] Language changed to: ${language}`);

@@ -10,7 +10,12 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 function controller() {
   const c = new InAppMessagingController();
-  c.configure({ apiKey: 'k', apiBaseUrl: 'https://api.test', debug: false });
+  c.configure({
+    apiKey: 'k',
+    apiBaseUrl: 'https://api.test',
+    lang: 'en',
+    debug: false,
+  });
   return c;
 }
 
@@ -97,6 +102,21 @@ describe('lifecycle', () => {
     await openUrlOf(c)('https://example.test', true);
     expect(second).toHaveBeenCalledTimes(1);
     expect(first).not.toHaveBeenCalled();
+  });
+
+  it('asks for campaigns in the language it was last told to use', () => {
+    // GameballApp.changeLanguage updates its own config; messaging holds a separate one and has to
+    // be told, or it goes on syncing in the language init() was given for the life of the app.
+    const c = controller();
+    const language = () =>
+      (c as unknown as { language: () => string }).language.call(c);
+    expect(language()).toBe('en');
+    c.setLanguage('ar');
+    expect(language()).toBe('ar');
+
+    // A customer's own declared language still wins, as it does on every Gameball SDK.
+    c.identified('a', 'fr');
+    expect(language()).toBe('fr');
   });
 
   it('keeps a language only for the customer who declared it', () => {

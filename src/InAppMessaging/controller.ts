@@ -116,6 +116,19 @@ export class InAppMessagingController {
     return this.service?.isStarted ?? false;
   }
 
+  /**
+   * Replaces the language `init` configured, for every request from here on.
+   *
+   * A customer who declared a `preferredLanguage` still wins, as they do on every Gameball SDK:
+   * this is the app's default, not an override of the customer's own choice. Campaigns already
+   * synced keep the copy they were fetched with until the next sync.
+   */
+  setLanguage(lang: string): void {
+    if (this.config) {
+      this.config.lang = lang;
+    }
+  }
+
   /** The customer messaging targets, and the language their messages are chosen in. */
   identified(customerId: string, preferredLanguage?: string | null): void {
     if (
