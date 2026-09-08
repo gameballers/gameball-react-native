@@ -43,14 +43,14 @@ export function textAlign(
 /**
  * Where the close glyph sits on the inline-end edge — top-right in English, top-left in Arabic.
  *
- * React Native does not mirror a physical `right` under RTL, and the web SDK places this glyph
- * with `inset-inline-end`, which does; without this the close button stays in the wrong corner in
- * every RTL locale.
+ * `end`, not a hand-picked `left` or `right`. React Native swaps physical edges itself under RTL
+ * (`I18nManager.swapLeftAndRightInRTL`, on by default), so a side computed from `isRTL` gets
+ * mirrored a second time and the glyph lands back in the corner it started from — which is what a
+ * device run in Arabic caught. The logical edge is resolved once, by the layout engine, and does
+ * not depend on that setting being left alone.
  */
-export function closeInlineEnd(
-  inset: number
-): { left: number } | { right: number } {
-  return I18nManager.isRTL ? { left: inset } : { right: inset };
+export function closeInlineEnd(inset: number): { end: number } {
+  return { end: inset };
 }
 
 /** A close glyph drawn from two crossing bars, so the SDK ships no icon asset. */

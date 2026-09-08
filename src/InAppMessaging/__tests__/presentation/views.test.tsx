@@ -144,23 +144,24 @@ describe('right-to-left', () => {
     I18nManager.isRTL = false;
   });
 
-  it('puts the close glyph on the inline-end edge in both directions', () => {
-    const ltr = fullscreen(messageOf());
-    const glyph = (t: TestRenderer.ReactTestRenderer) =>
-      flatten(t.root.findByProps({ accessibilityLabel: 'Close' })) as {
-        left?: number;
-        right?: number;
-      };
-    expect(glyph(ltr).right).toBeGreaterThan(0);
-    expect(glyph(ltr).left).toBeUndefined();
-    unmount(ltr);
-
-    I18nManager.isRTL = true;
-    const rtl = fullscreen(messageOf());
-    expect(glyph(rtl).left).toBeGreaterThan(0);
-    expect(glyph(rtl).right).toBeUndefined();
-    unmount(rtl);
-  });
+  it.each([false, true])(
+    'places the close glyph on the logical end edge, isRTL=%s',
+    (rtl) => {
+      // Deliberately not a physical side. React Native swaps left and right itself under RTL, so
+      // a side picked from isRTL is mirrored twice and the glyph comes back to the wrong corner —
+      // which is exactly what a device run in Arabic caught. `end` is resolved once, by the
+      // layout engine.
+      I18nManager.isRTL = rtl;
+      const tree = fullscreen(messageOf());
+      const glyph = flatten(
+        tree.root.findByProps({ accessibilityLabel: 'Close' })
+      ) as { left?: number; right?: number; end?: number };
+      expect(glyph.end).toBeGreaterThan(0);
+      expect(glyph.left).toBeUndefined();
+      expect(glyph.right).toBeUndefined();
+      unmount(tree);
+    }
+  );
 
   it('lets an unaligned message follow the layout direction', () => {
     // 'auto' is the only React Native value that mirrors; 'left' pins Arabic to the wrong margin.
