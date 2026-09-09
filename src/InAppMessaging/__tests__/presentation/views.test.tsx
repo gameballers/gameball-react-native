@@ -56,9 +56,22 @@ function fullscreenOrModal(type: 'modal' | 'fullscreen') {
   const message = messageOf({ type, showCloseButton: true } as never);
   return mount(
     type === 'fullscreen' ? (
-      <FullscreenView message={message} onShown={noop} onPress={noop} onDismiss={noop} topInset={0} bottomInset={0} />
+      <FullscreenView
+        message={message}
+        onShown={noop}
+        onPress={noop}
+        onDismiss={noop}
+        topInset={0}
+        bottomInset={0}
+      />
     ) : (
-      <ModalView message={message} onShown={noop} onPress={noop} onDismiss={noop} onScrim={noop} />
+      <ModalView
+        message={message}
+        onShown={noop}
+        onPress={noop}
+        onDismiss={noop}
+        onScrim={noop}
+      />
     )
   );
 }
@@ -158,7 +171,11 @@ describe('the close affordances each type offers', () => {
   it('never draws a glyph on a slide-up, whatever the message says', () => {
     const tree = mount(
       <SlideupView
-        message={messageOf({ type: 'slideup', imageUrl: null, showCloseButton: true } as never)}
+        message={messageOf({
+          type: 'slideup',
+          imageUrl: null,
+          showCloseButton: true,
+        } as never)}
         onShown={noop}
         onPress={noop}
         onDismiss={noop}
@@ -166,15 +183,22 @@ describe('the close affordances each type offers', () => {
         bottomInset={0}
       />
     );
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Close' })).toHaveLength(0);
+    expect(
+      tree.root.findAllByProps({ accessibilityLabel: 'Close' })
+    ).toHaveLength(0);
     unmount(tree);
   });
 
-  it.each(['modal', 'fullscreen'] as const)('always draws one on a %s', (type) => {
-    const tree = fullscreenOrModal(type);
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Close' }).length).toBeGreaterThan(0);
-    unmount(tree);
-  });
+  it.each(['modal', 'fullscreen'] as const)(
+    'always draws one on a %s',
+    (type) => {
+      const tree = fullscreenOrModal(type);
+      expect(
+        tree.root.findAllByProps({ accessibilityLabel: 'Close' }).length
+      ).toBeGreaterThan(0);
+      unmount(tree);
+    }
+  );
 });
 
 describe('right-to-left', () => {
