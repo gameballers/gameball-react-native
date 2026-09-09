@@ -158,6 +158,14 @@ export function QaPanel() {
           });
         },
         stop: () => app.stopInAppMessaging(),
+        // Points the SDK at another API host, so a case can watch a failed sync fall back to the
+        // cached campaigns. `init` is the public way to reconfigure; messaging reads the new base
+        // on its next request.
+        api: async (p) => {
+          const base = p.get('base') || cfg.apiBaseUrl;
+          await app.init({ apiKey: cfg.apiKey, lang: cfg.lang, apiPrefix: base });
+          log(`api base is now ${base}`);
+        },
         fire: async (p) => {
           const name = (p.get('event') ?? latest.current.eventName).trim();
           const meta: Record<string, unknown> = {};
@@ -202,6 +210,8 @@ export function QaPanel() {
                 campaign: m.campaignId,
                 variation: m.variationId,
                 buttons: m.buttons.map((b) => b.text),
+                buttonActions: m.buttons.map((b) => b.action?.type ?? null),
+                locale: m.extras?.locale ?? null,
                 autoDismissMs: m.autoDismissMs,
                 close: m.showCloseButton,
                 click: m.clickAction?.type ?? null,
