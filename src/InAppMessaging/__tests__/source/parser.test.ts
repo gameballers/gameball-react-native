@@ -264,6 +264,10 @@ describe('parseSyncResponse rules', () => {
     expect(cb(null)).toEqual([true, true]);
     expect(cb('weird')).toEqual([true, true]);
     expect(cb('swipe', 3)).toEqual([true, true]);
+    // The field was removed from the product on 1 Sep 2026 and no longer reaches the wire, so
+    // this branch is not a fallback any more — it is the only path every live campaign takes.
+    // A modal offers both ways out, and that is now the whole of the behaviour.
+    expect(cb(undefined)).toEqual([true, true]);
   });
   it('pairs buttons by id across content and locale, drops unpaired, keeps the first two', () => {
     const c = parseSyncResponse(

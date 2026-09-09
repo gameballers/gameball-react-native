@@ -2,6 +2,7 @@ import React from 'react';
 import { I18nManager, ScrollView, StyleSheet } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { FullscreenView } from '../../presentation/views/FullscreenView';
+import { ModalView } from '../../presentation/views/ModalView';
 import { SlideupView } from '../../presentation/views/SlideupView';
 import { textAlign } from '../../presentation/views/shared';
 import type { InAppMessage, MessageButton } from '../../models/message';
@@ -49,6 +50,18 @@ function unmount(tree: TestRenderer.ReactTestRenderer): void {
 }
 
 const noop = () => {};
+
+/** Either card type, with a close glyph asked for. */
+function fullscreenOrModal(type: 'modal' | 'fullscreen') {
+  const message = messageOf({ type, showCloseButton: true } as never);
+  return mount(
+    type === 'fullscreen' ? (
+      <FullscreenView message={message} onShown={noop} onPress={noop} onDismiss={noop} topInset={0} bottomInset={0} />
+    ) : (
+      <ModalView message={message} onShown={noop} onPress={noop} onDismiss={noop} onScrim={noop} />
+    )
+  );
+}
 
 /** The share of its parent a node asks for, as authored. */
 function flexBasisOf(node: TestRenderer.ReactTestInstance): unknown {
@@ -135,6 +148,31 @@ describe('FullscreenView', () => {
     );
     expect(tree_position(tree)).toBe('absolute');
     expect(tree.root.findAllByType(ScrollView)).toHaveLength(0);
+    unmount(tree);
+  });
+});
+
+describe('the close affordances each type offers', () => {
+  // Since closeBehaviour was removed from the composer these are fixed per type rather than
+  // per campaign, so they are worth stating outright: they are the whole of the behaviour.
+  it('never draws a glyph on a slide-up, whatever the message says', () => {
+    const tree = mount(
+      <SlideupView
+        message={messageOf({ type: 'slideup', imageUrl: null, showCloseButton: true } as never)}
+        onShown={noop}
+        onPress={noop}
+        onDismiss={noop}
+        topInset={0}
+        bottomInset={0}
+      />
+    );
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Close' })).toHaveLength(0);
+    unmount(tree);
+  });
+
+  it.each(['modal', 'fullscreen'] as const)('always draws one on a %s', (type) => {
+    const tree = fullscreenOrModal(type);
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Close' }).length).toBeGreaterThan(0);
     unmount(tree);
   });
 });
