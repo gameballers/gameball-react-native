@@ -10823,6 +10823,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"react-native-device-info@npm:^10.13.1":
+  version: 10.14.0
+  resolution: "react-native-device-info@npm:10.14.0"
+  peerDependencies:
+    react-native: "*"
+  checksum: bf0630beef9c391498122cc66708fa9922bf8335701b0fe7f30642f509d60441338607a89daaa86eb9ced675926ee948da034c63c03659053ce34c10d50bd9e3
+  languageName: node
+  linkType: hard
+
 "react-native-gameball@workspace:.":
   version: 0.0.0-use.local
   resolution: "react-native-gameball@workspace:."
@@ -10845,14 +10854,24 @@ __metadata:
     react: ^18.2.0
     react-native: ^0.70.0
     react-native-builder-bob: ^0.20.0
+    react-native-device-info: ^10.13.1
     react-native-modal: ^13.0.1
     react-native-push-notification-popup: ^1.6.1
     react-native-webview: ^13.15.0
     release-it: ^15.0.0
     typescript: ^5.0.2
   peerDependencies:
+    "@react-native-async-storage/async-storage": ">=1.17.10"
     react: "*"
     react-native: "*"
+    react-native-device-info: ">=10.13.1"
+    react-native-modal: ">=13.0.1"
+    react-native-push-notification-popup: ">=1.6.1"
+    react-native-safe-area-context: ">=4.0.0"
+    react-native-webview: ">=13.15.0"
+  peerDependenciesMeta:
+    react-native-safe-area-context:
+      optional: true
   languageName: unknown
   linkType: soft
 
