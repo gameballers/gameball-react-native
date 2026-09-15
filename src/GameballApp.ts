@@ -13,6 +13,9 @@ import type {
   GameballSDKHeadersType,
 } from './types/Common';
 import { API_ENDPOINTS, ERROR_MESSAGES, STORAGE_KEYS } from './constants';
+import { inAppMessaging } from './InAppMessaging';
+import type { StartInAppMessagingOptions } from './InAppMessaging';
+import type { InAppMessage } from './InAppMessaging/models/message';
 
 const package_json = require('../package.json');
 
@@ -71,6 +74,14 @@ export class GameballApp {
       this.customerPreferredLanguage = await AsyncStorage.getItem(
         STORAGE_KEYS.CUSTOMER_PREFERRED_LANGUAGE
       ).catch(() => null);
+
+      // In-app messaging shares this configuration; it opens no connection until it is started.
+      inAppMessaging.configure({
+        apiKey: config.apiKey,
+        lang: config.lang,
+        apiBaseUrl: config.apiPrefix,
+        debug: config.debug,
+      });
 
       // Fetch bot settings
       await this.fetchBotSettings();
@@ -146,6 +157,12 @@ export class GameballApp {
       result = {
         gameballId: response.gameballId || response.id || '',
       };
+
+      // Messaging follows the identified customer; changing customer re-syncs their campaigns.
+      inAppMessaging.identified(
+        request.customerId,
+        request.customerAttributes?.preferredLanguage
+      );
     } catch (error) {
       callback?.onError?.(
         error instanceof Error
@@ -179,6 +196,12 @@ export class GameballApp {
 
       // Override or clear sessionToken - always update on every call
       this.sessionToken = sessionToken || null;
+
+      // Every event is also a trigger. Evaluated first, so a matching message can display
+      // without waiting for the round trip.
+      for (const [name, properties] of Object.entries(event.events ?? {})) {
+        inAppMessaging.onCustomEvent(name, properties ?? {});
+      }
 
       // Use the event data directly as it now matches the expected structure
       await this.makeRequest(API_ENDPOINTS.EVENTS, event);
@@ -320,6 +343,9 @@ export class GameballApp {
     if (this.config) {
       this.config.lang = language;
     }
+    // In-app messaging keeps its own configuration, so it has to be told: without this it would
+    // go on asking for campaigns in whichever language init() was given, for the life of the app.
+    inAppMessaging.setLanguage(language);
 
     AsyncStorage.getItem(STORAGE_KEYS.CUSTOMER_ID)
       .then((customerId) => {
@@ -438,6 +464,42 @@ export class GameballApp {
       ...internalRequest,
       customerAttributes: processedCustomerAttributes,
     };
+  }
+
+  /**
+   * Sync campaigns and start showing in-app messages.
+   *
+   * Awaited: this platform's storage is asynchronous, and the frequency history has to be in
+   * memory before the first campaign is judged against it. Mount `<GameballInAppMessages />`
+   * once near the root of the app, or nothing has anywhere to draw.
+   */
+  async startInAppMessaging(
+    options: StartInAppMessagingOptions = {}
+  ): Promise<void> {
+    this.ensureInitialized();
+    return inAppMessaging.start(options);
+  }
+
+  /**
+   * Stops in-app messaging, dismissing anything on screen, sending pending analytics and clearing
+   * state. Call on logout. Safe to call when it was never started.
+   */
+  stopInAppMessaging(): void {
+    inAppMessaging.stop();
+  }
+
+  get isInAppMessagingStarted(): boolean {
+    return inAppMessaging.isStarted;
+  }
+
+  /** Hold messages while the app's own modal, drawer or checkout step is open. */
+  setOverlayOpen(open: boolean): void {
+    inAppMessaging.setOverlayOpen(open);
+  }
+
+  /** Observe every selected message. Returns an unsubscribe function. */
+  onInAppMessage(listener: (message: InAppMessage) => void): () => void {
+    return inAppMessaging.onMessage(listener);
   }
 
   private async makeRequest(
