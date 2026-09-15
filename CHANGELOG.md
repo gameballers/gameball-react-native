@@ -4,6 +4,26 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [3.4.0] - 2026-09-15 💬
+
+> **Minor Release**: In-app messaging — an opt-in module for campaigns authored in the Gameball dashboard. No existing API changed; integrations that do not opt in are unaffected.
+
+### ✨ Added
+- 💬 **In-App Messaging**: `GameballApp.getInstance().startInAppMessaging(options?)` / `stopInAppMessaging()`. Nothing runs until that call — no requests, no timers, no storage, nothing drawn
+- 🖼️ **Three message types**: slideup (a non-blocking banner at either edge, dismissed by swiping toward it), modal (a card over a scrim) and fullscreen (edge to edge), each in a stacked and an image-only composition, styled per campaign from the dashboard
+- 🎯 **Triggers & targeting**: `session_start` and named events, with metadata filters (`equals`, `notEquals`, `greaterThan`, `greaterThanOrEqual`, `lessThan`, `lessThanOrEqual`, `contains`), per-campaign repeat rules, a global cooldown floor and UTC quiet hours
+- 📊 **Message analytics**: impressions, clicks (carrying `buttonId` when a button was tapped) and dismissals, batched and persisted so an impression logged just before a force-quit still arrives
+- 🖐️ **Host hooks**: `beforeDisplay` to show, defer or discard a message; `onAction` to intercept a tap; `onNavigate` to route a message through your own navigator
+- 📱 **`<GameballInAppMessages />`**: the surface messages draw on. Pass `insets={useSafeAreaInsets()}` for exact placement against the notch and home indicator
+- 🔤 **Personalisation** refreshed just before display, and `changeLanguage` re-syncs campaigns in the new language
+
+### 📝 Notes
+- 🔇 **Console diagnostics follow `__DEV__`.** `[GameballIAM]` lines print in a development build and are silent in release; pass `debug: true` to `startInAppMessaging` to turn them back on
+- 📦 **`@react-native-async-storage/async-storage` and `react-native-safe-area-context` are optional peers.** Both are resolved at runtime and messaging works without either — but without async-storage, frequency caps and the analytics outbox last only as long as the process, so a once-only campaign can show again after a restart
+- In-app messaging needs the `integrations/inapp-messages` endpoints enabled for your account. Where they are not, the SDK logs the 404 and stays silent
+
+---
+
 ## [3.1.2] - 2026-04-08 🔧
 
 > **Patch Release**: Fix widget loading delay caused by srcdoc iframe blocking
