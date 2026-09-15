@@ -15,6 +15,13 @@ export interface GameballConfig {
   platform?: string;
   sessionToken?: string;
   apiPrefix?: string;
+  /**
+   * Console diagnostics for in-app messaging, prefixed `[GameballIAM]`.
+   *
+   * Defaults to `__DEV__`: on while you are building, silent in the release build your
+   * customers install. Set it to `true` in a release build only to reproduce a problem.
+   */
+  debug?: boolean;
 }
 
 export interface Callback<T> {
