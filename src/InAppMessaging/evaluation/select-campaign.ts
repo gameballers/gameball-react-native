@@ -1,5 +1,5 @@
 import { iamLog } from '../log';
-import { hasExpiredAt, type Campaign } from '../models/campaign';
+import { campaignKeyOf, hasExpiredAt, type Campaign } from '../models/campaign';
 import { quietHoursContains, type QuietHours } from '../models/quiet-hours';
 import { triggerMatches, type TriggerOccurrence } from '../models/trigger';
 import type { CapState } from './frequency-cap';
@@ -59,7 +59,7 @@ export function isRepeatEligible(
   capState: CapState,
   nowMs: number
 ): boolean {
-  const lastShown = capState.lastDisplayByCampaign.get(campaign.campaignId);
+  const lastShown = capState.lastDisplayByCampaign.get(campaignKeyOf(campaign));
   if (lastShown === undefined) return true;
   if (!campaign.repeatable) return false;
   if (campaign.minIntervalMs === null) return true;

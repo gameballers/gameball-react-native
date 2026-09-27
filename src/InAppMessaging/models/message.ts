@@ -37,6 +37,34 @@ export interface MessageStyle {
   bodyAlign?: TextAlign;
 }
 
+/**
+ * A reward campaign rendered as the message's own content.
+ *
+ * The campaign **is** the content — there is no headline, body, image or button, because this is
+ * not a teaser that links to a game, it is the game.
+ *
+ * Deliberately not a URL on the wire: one would have to carry the api key and the player id,
+ * making the payload both credential-bearing and customer-specific. The SDK composes the URL from
+ * state it already holds and the two fields here.
+ */
+export interface WidgetContent {
+  /** The challenge to open. All local bookkeeping keys off this, never off the entry's
+   * `campaignId`, which is always 0 on a game. */
+  gameCampaignId: number;
+  /** Which game it is, as the open-details text: `wheel`, `quiz`, `scratch`… */
+  gameCampaignType: string;
+  /** Seconds to wait after the trigger fires. null = open immediately. Not on the sync entry
+   * today; read when it appears so this needs no change on the day it does. */
+  delayMs: number | null;
+  /** Stop offering after this many dismissals without a play. null = no cap. */
+  dismissLimit: number | null;
+}
+
+/** What the host widget is asked to open. */
+export function openDetailFor(widget: WidgetContent): string {
+  return `details_${widget.gameCampaignType}_${widget.gameCampaignId}`;
+}
+
 export interface InAppMessage {
   /** `campaignId` or `campaignId/variationId`; diagnostics only. */
   id: string;
@@ -63,6 +91,17 @@ export interface InAppMessage {
   buttons: MessageButton[];
   extras: Record<string, string>;
   style: MessageStyle;
+  /** A reward campaign to render instead of artwork and copy. null for every ordinary message.
+   *
+   * A message carrying this renders a live widget, so it is exempt from the parser's "nothing to
+   * render" rule — its content arrives over the network at display time rather than in the
+   * payload. */
+  widget: WidgetContent | null;
+}
+
+/** Whether this message's content is a reward campaign rather than artwork. */
+export function isWidgetMessage(message: InAppMessage): boolean {
+  return message.widget !== null;
 }
 
 /** Every image the message carries. All of them must be in memory before it may display. */

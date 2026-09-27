@@ -24,6 +24,7 @@ export function message(over: Partial<InAppMessage> = {}): InAppMessage {
     buttons: [],
     extras: {},
     style: {},
+  widget: null,
     ...over,
   };
 }

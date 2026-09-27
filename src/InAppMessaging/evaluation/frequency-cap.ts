@@ -1,9 +1,10 @@
+import { parseCampaignKey, type CampaignKey } from '../models/campaign-key';
 import { iamLog } from '../log';
 import type { KeyValueStore } from '../storage/key-value-store';
 
 /** Immutable view of display history for the pure evaluator. Times are epoch ms. */
 export interface CapState {
-  lastDisplayByCampaign: ReadonlyMap<number, number>;
+  lastDisplayByCampaign: ReadonlyMap<CampaignKey, number>;
   lastDisplayAt: number | null;
 }
 
@@ -12,11 +13,11 @@ export interface FrequencyCap {
   load(customerId: string): void;
   snapshot(): CapState;
   /** Called at impression, never at selection. */
-  recordDisplay(campaignId: number, atMs: number): void;
+  recordDisplay(campaign: CampaignKey, atMs: number): void;
 }
 
 export class InMemoryFrequencyCap implements FrequencyCap {
-  protected history = new Map<number, number>();
+  protected history = new Map<CampaignKey, number>();
   protected lastDisplayAt: number | null = null;
 
   load(_customerId: string): void {
@@ -29,8 +30,8 @@ export class InMemoryFrequencyCap implements FrequencyCap {
       lastDisplayAt: this.lastDisplayAt,
     };
   }
-  recordDisplay(campaignId: number, atMs: number): void {
-    this.history.set(campaignId, atMs);
+  recordDisplay(campaign: CampaignKey, atMs: number): void {
+    this.history.set(campaign, atMs);
     this.lastDisplayAt = atMs;
   }
 }
@@ -39,7 +40,7 @@ export const DISPLAY_HISTORY_KEY = 'gameball_iam_display_history';
 
 interface StoredHistory {
   customerId: unknown;
-  campaigns: Map<number, number>;
+  campaigns: Map<CampaignKey, number>;
 }
 
 /** Throws only on invalid JSON; a payload that is not an envelope is null (the caller drops it). */
@@ -47,15 +48,18 @@ function decodeEnvelope(raw: string): StoredHistory | null {
   const decoded: unknown = JSON.parse(raw);
   if (typeof decoded !== 'object' || decoded === null) return null;
   const envelope = decoded as { customerId?: unknown; campaigns?: unknown };
-  const campaigns = new Map<number, number>();
+  const campaigns = new Map<CampaignKey, number>();
   if (typeof envelope.campaigns === 'object' && envelope.campaigns !== null) {
     for (const [key, value] of Object.entries(
       envelope.campaigns as Record<string, unknown>
     )) {
-      const id = Number(key);
+      // A bare number is how every history written before game campaigns looks, and all of those
+      // are message campaigns. Reading them as such is what stops an update re-showing every
+      // once-ever campaign.
+      const campaign = parseCampaignKey(key);
       const at = typeof value === 'string' ? Date.parse(value) : NaN;
-      if (!Number.isInteger(id) || Number.isNaN(at)) continue;
-      campaigns.set(id, at);
+      if (campaign === null || Number.isNaN(at)) continue;
+      campaigns.set(campaign, at);
     }
   }
   return { customerId: envelope.customerId, campaigns };
@@ -110,13 +114,13 @@ export class StoredFrequencyCap extends InMemoryFrequencyCap {
     }
   }
 
-  override recordDisplay(campaignId: number, atMs: number): void {
-    super.recordDisplay(campaignId, atMs);
+  override recordDisplay(campaign: CampaignKey, atMs: number): void {
+    super.recordDisplay(campaign, atMs);
     this.persist();
   }
 
   /** Keeps the later of the two timestamps for every campaign present in both. */
-  private absorb(campaigns: ReadonlyMap<number, number>): void {
+  private absorb(campaigns: ReadonlyMap<CampaignKey, number>): void {
     for (const [id, at] of campaigns) {
       const mine = this.history.get(id);
       if (mine === undefined || at > mine) this.history.set(id, at);

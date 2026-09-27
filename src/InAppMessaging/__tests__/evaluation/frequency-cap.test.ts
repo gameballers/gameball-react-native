@@ -1,3 +1,4 @@
+import { gameKey, messageKey } from '../../models/campaign-key';
 import { MemoryStore } from '../../storage/key-value-store';
 import {
   InMemoryFrequencyCap,
@@ -11,10 +12,10 @@ describe('InMemoryFrequencyCap', () => {
     const cap = new InMemoryFrequencyCap();
     cap.load('c1');
     expect(cap.snapshot().lastDisplayAt).toBeNull();
-    cap.recordDisplay(7, T0);
-    cap.recordDisplay(8, T0 + 1000);
+    cap.recordDisplay(messageKey(7), T0);
+    cap.recordDisplay(messageKey(8), T0 + 1000);
     const s = cap.snapshot();
-    expect(s.lastDisplayByCampaign.get(7)).toBe(T0);
+    expect(s.lastDisplayByCampaign.get(messageKey(7))).toBe(T0);
     expect(s.lastDisplayAt).toBe(T0 + 1000);
   });
 });
@@ -24,21 +25,21 @@ describe('StoredFrequencyCap', () => {
     const store = new MemoryStore();
     const a = new StoredFrequencyCap(store);
     a.load('c1');
-    a.recordDisplay(7, T0);
+    a.recordDisplay(messageKey(7), T0);
     const b = new StoredFrequencyCap(store);
     b.load('c1');
-    expect(b.snapshot().lastDisplayByCampaign.get(7)).toBe(T0);
+    expect(b.snapshot().lastDisplayByCampaign.get(messageKey(7))).toBe(T0);
     expect(b.snapshot().lastDisplayAt).toBe(T0);
     expect(JSON.parse(store.get('gameball_iam_display_history')!)).toEqual({
       customerId: 'c1',
-      campaigns: { '7': new Date(T0).toISOString() },
+      campaigns: { 'message:7': new Date(T0).toISOString() },
     });
   });
   it('discards history that belongs to another customer', () => {
     const store = new MemoryStore();
     const a = new StoredFrequencyCap(store);
     a.load('c1');
-    a.recordDisplay(7, T0);
+    a.recordDisplay(messageKey(7), T0);
     const b = new StoredFrequencyCap(store);
     b.load('c2');
     expect(b.snapshot().lastDisplayByCampaign.size).toBe(0);
@@ -57,19 +58,19 @@ describe('StoredFrequencyCap', () => {
     const tabB = new StoredFrequencyCap(store);
     tabA.load('c1');
     tabB.load('c1');
-    tabA.recordDisplay(1, T0);
-    tabB.recordDisplay(2, T0 + 1000);
+    tabA.recordDisplay(messageKey(1), T0);
+    tabB.recordDisplay(messageKey(2), T0 + 1000);
     expect(JSON.parse(store.get('gameball_iam_display_history')!)).toEqual({
       customerId: 'c1',
       campaigns: {
-        '1': new Date(T0).toISOString(),
-        '2': new Date(T0 + 1000).toISOString(),
+        'message:1': new Date(T0).toISOString(),
+        'message:2': new Date(T0 + 1000).toISOString(),
       },
     });
-    expect(tabA.snapshot().lastDisplayByCampaign.get(2)).toBeUndefined();
+    expect(tabA.snapshot().lastDisplayByCampaign.get(messageKey(2))).toBeUndefined();
     tabA.reload();
-    expect(tabA.snapshot().lastDisplayByCampaign.get(1)).toBe(T0);
-    expect(tabA.snapshot().lastDisplayByCampaign.get(2)).toBe(T0 + 1000);
+    expect(tabA.snapshot().lastDisplayByCampaign.get(messageKey(1))).toBe(T0);
+    expect(tabA.snapshot().lastDisplayByCampaign.get(messageKey(2))).toBe(T0 + 1000);
     expect(tabA.snapshot().lastDisplayAt).toBe(T0 + 1000);
   });
   it('reload before the first load is a no-op', () => {
@@ -80,7 +81,7 @@ describe('StoredFrequencyCap', () => {
   it('load resets in-memory state', () => {
     const cap = new StoredFrequencyCap(new MemoryStore());
     cap.load('c1');
-    cap.recordDisplay(7, T0);
+    cap.recordDisplay(messageKey(7), T0);
     cap.load('c2');
     expect(cap.snapshot().lastDisplayAt).toBeNull();
   });
@@ -88,13 +89,13 @@ describe('StoredFrequencyCap', () => {
     const store = new MemoryStore();
     const tabA = new StoredFrequencyCap(store);
     tabA.load('c1');
-    tabA.recordDisplay(1, T0);
+    tabA.recordDisplay(messageKey(1), T0);
     const tabB = new StoredFrequencyCap(store);
     tabB.load('c2'); // discards c1's envelope, as a fresh sign-in does
-    tabB.recordDisplay(2, T0 + 1000);
+    tabB.recordDisplay(messageKey(2), T0 + 1000);
     tabA.reload();
-    expect(tabA.snapshot().lastDisplayByCampaign.get(1)).toBe(T0);
-    expect(tabA.snapshot().lastDisplayByCampaign.get(2)).toBeUndefined();
+    expect(tabA.snapshot().lastDisplayByCampaign.get(messageKey(1))).toBe(T0);
+    expect(tabA.snapshot().lastDisplayByCampaign.get(messageKey(2))).toBeUndefined();
     expect(
       JSON.parse(store.get('gameball_iam_display_history')!).customerId
     ).toBe('c2');
@@ -104,10 +105,43 @@ describe('StoredFrequencyCap', () => {
     store.set('gameball_iam_display_history', '{nope');
     const cap = new StoredFrequencyCap(store);
     cap.load('c1');
-    cap.recordDisplay(1, T0);
+    cap.recordDisplay(messageKey(1), T0);
     expect(JSON.parse(store.get('gameball_iam_display_history')!)).toEqual({
       customerId: 'c1',
-      campaigns: { '1': new Date(T0).toISOString() },
+      campaigns: { 'message:1': new Date(T0).toISOString() },
     });
+  });
+
+  it('reads history written before game campaigns as message campaigns', () => {
+    // Every history written by an earlier release keys on a bare number. Without this an update
+    // loses it, and every once-ever campaign shows again.
+    const store = new MemoryStore();
+    store.set(
+      'gameball_iam_display_history',
+      JSON.stringify({
+        customerId: 'c1',
+        campaigns: { '7': new Date(T0).toISOString() },
+      })
+    );
+    const cap = new StoredFrequencyCap(store);
+    cap.load('c1');
+
+    expect(cap.snapshot().lastDisplayByCampaign.get(messageKey(7))).toBe(T0);
+  });
+
+  it('keeps a game and a message of the same number apart across a reload', () => {
+    const store = new MemoryStore();
+    const cap = new StoredFrequencyCap(store);
+    cap.load('c1');
+    cap.recordDisplay(messageKey(9645), T0);
+    cap.recordDisplay(gameKey(9645), T0 + 1000);
+
+    const reloaded = new StoredFrequencyCap(store);
+    reloaded.load('c1');
+
+    expect(reloaded.snapshot().lastDisplayByCampaign.size).toBe(2);
+    expect(reloaded.snapshot().lastDisplayByCampaign.get(gameKey(9645))).toBe(
+      T0 + 1000
+    );
   });
 });

@@ -1,3 +1,4 @@
+import { messageKey } from '../../models/campaign-key';
 import { InAppMessagingService } from '../../service/in-app-messaging-service';
 import { InMemoryFrequencyCap } from '../../evaluation/frequency-cap';
 import type { Campaign } from '../../models/campaign';
@@ -101,7 +102,7 @@ describe('InAppMessagingService', () => {
       expect(h.analytics.events).toEqual([]);
       h.presenter.paint();
       expect(h.analytics.types()).toEqual(['impression']);
-      expect(h.cap.snapshot().lastDisplayByCampaign.get(1)).toBe(T0);
+      expect(h.cap.snapshot().lastDisplayByCampaign.get(messageKey(1))).toBe(T0);
     });
     it('a second start for the same customer does not refetch; a new customer does and reloads history', async () => {
       const h = harness(sync([campaign(1)]));

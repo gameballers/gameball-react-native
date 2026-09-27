@@ -10,7 +10,7 @@ import {
   selectCampaign,
 } from '../evaluation/select-campaign';
 import { iamLog } from '../log';
-import type { Campaign } from '../models/campaign';
+import { campaignKeyOf, type Campaign } from '../models/campaign';
 import {
   artworkUrlsOf,
   type ClickAction,
@@ -605,7 +605,7 @@ export class InAppMessagingService {
     const presented = this.presenter.present(message, {
       onShown: () => {
         shown = true;
-        this.cap.recordDisplay(campaign.campaignId, this.clock());
+        this.cap.recordDisplay(campaignKeyOf(campaign), this.clock());
         this.logEvent(campaign, 'impression', shownTo);
       },
       onButtonPressed: (button) => {
