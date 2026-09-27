@@ -21,6 +21,7 @@ function messageOf(overrides: Partial<InAppMessage> = {}): InAppMessage {
     dismissible: true,
     scrimDismisses: true,
     style: {},
+    widget: null,
     ...overrides,
   } as InAppMessage;
 }

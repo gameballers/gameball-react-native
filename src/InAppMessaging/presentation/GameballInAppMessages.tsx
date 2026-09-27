@@ -9,6 +9,8 @@ import { deviceInsets } from './safe-area';
 import { SlideupView } from './views/SlideupView';
 import { ModalView } from './views/ModalView';
 import { FullscreenView } from './views/FullscreenView';
+import { WidgetView } from './views/WidgetView';
+import { inAppWidgetUrl } from './widget-url';
 
 export interface GameballInAppMessagesProps {
   /**
@@ -74,6 +76,43 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       }
     };
     const dismiss = () => presenter.dismiss();
+
+    // A reward campaign is its own composition, before the type branches: it has no artwork, and
+    // its content arrives over the network at display time.
+    if (message.widget) {
+      const url = inAppWidgetUrl(message.widget);
+      if (url === null) {
+        // Nothing to open; take it away rather than draw an empty card.
+        dismiss();
+        return null;
+      }
+      return (
+        <Modal
+          visible
+          transparent
+          animationType="none"
+          statusBarTranslucent
+          supportedOrientations={[
+            'portrait',
+            'portrait-upside-down',
+            'landscape',
+            'landscape-left',
+            'landscape-right',
+          ]}
+          onRequestClose={dismiss}
+        >
+          <WidgetView
+            message={message}
+            url={url}
+            onShown={current.onShown}
+            onFailed={dismiss}
+            onDismiss={dismiss}
+            topInset={topInset}
+            bottomInset={bottomInset}
+          />
+        </Modal>
+      );
+    }
 
     if (message.type === 'slideup') {
       return (

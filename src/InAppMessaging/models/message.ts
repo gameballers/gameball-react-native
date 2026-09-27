@@ -101,7 +101,7 @@ export interface InAppMessage {
 
 /** Whether this message's content is a reward campaign rather than artwork. */
 export function isWidgetMessage(message: InAppMessage): boolean {
-  return message.widget !== null;
+  return Boolean(message.widget);
 }
 
 /** Every image the message carries. All of them must be in memory before it may display. */

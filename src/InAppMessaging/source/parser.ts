@@ -178,6 +178,15 @@ function parseTrigger(json: unknown, label: string): MessageTrigger | null {
   switch (type) {
     case 'session_start':
       return { kind: 'session_start' };
+    case 'screen':
+      // Deliberate, not unimplemented. On the web a URL is ambient and free; on mobile nothing
+      // is, so a screen trigger needs the host to instrument it — at which point it costs the
+      // same as a custom event. Named here so a marketer who targets a screen gets a diagnosable
+      // silence rather than an inexplicable one.
+      iamLog(
+        `campaign ${label} dropped: screen triggers are not supported by this SDK version (screen "${String(asString(json.name))}")`
+      );
+      return null;
     case 'event':
     case 'custom_event': {
       const eventName = asString(json.name);

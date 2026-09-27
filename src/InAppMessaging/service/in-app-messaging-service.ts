@@ -11,6 +11,7 @@ import {
 } from '../evaluation/select-campaign';
 import { iamLog } from '../log';
 import { campaignKeyOf, type Campaign } from '../models/campaign';
+import type { CampaignKey } from '../models/campaign-key';
 import {
   artworkUrlsOf,
   type ClickAction,
@@ -120,7 +121,17 @@ export class InAppMessagingService {
   private beforeDisplay: BeforeDisplay | undefined;
   private onAction: OnAction | undefined;
   private campaigns: Campaign[] = [];
-  private artworkReady = new Set<number>();
+
+  /**
+   * Whether the held campaigns came from the cache rather than a live sync.
+   *
+   * Only games care. A message carries its own content, so a cached one is still correct; a game
+   * carries a pointer and fetches its content live, so a cached entry is a promise this SDK
+   * cannot keep — the campaign may have ended, and the widget would answer "this campaign is not
+   * available" to a customer who never asked for it.
+   */
+  private campaignsFromCache = false;
+  private artworkReady = new Set<CampaignKey>();
   private artworkCheckedAt: number | null = null;
   private artworkRefreshInFlight = false;
   private cooldownMs = DEFAULT_DISPLAY_COOLDOWN_MS;
@@ -331,6 +342,7 @@ export class InAppMessagingService {
       const result = await this.source.fetch(customerId);
       if (this.generation !== generation) return;
       this.campaigns = result.campaigns;
+      this.campaignsFromCache = false;
       this.cooldownMs = result.cooldownMs;
       this.quietHours = result.quietHours;
       synced = true;
@@ -346,6 +358,7 @@ export class InAppMessagingService {
     }
 
     if (!synced && cached) {
+      this.campaignsFromCache = true;
       this.campaigns = cached.campaigns;
       this.cooldownMs = cached.cooldownMs;
       this.quietHours = cached.quietHours;
@@ -389,7 +402,7 @@ export class InAppMessagingService {
     // A stop/switch while the images loaded means these results belong to a session that is gone.
     if (this.generation !== generation) return;
     this.artworkReady = new Set(
-      campaigns.filter((_, i) => ready[i]).map((c) => c.campaignId)
+      campaigns.filter((_, i) => ready[i]).map(campaignKeyOf)
     );
     const took = this.clock() - startedAt;
     if (took > SLOW_PREFETCH_MS)
@@ -436,9 +449,7 @@ export class InAppMessagingService {
         // The customer (or the campaign set) may have changed while the images loaded; marking
         // artwork ready for campaigns nobody is evaluating any more would be a stale write.
         if (this.generation !== generation) return;
-        const recovered = notReady
-          .filter((_, i) => ready[i])
-          .map((c) => c.campaignId);
+        const recovered = notReady.filter((_, i) => ready[i]).map(campaignKeyOf);
         if (recovered.length) {
           for (const id of recovered) this.artworkReady.add(id);
           iamLog(
@@ -460,10 +471,19 @@ export class InAppMessagingService {
     const displayable: Campaign[] = [];
     const notReady: Campaign[] = [];
     for (const c of this.campaigns) {
-      if (this.artworkReady.has(c.campaignId)) displayable.push(c);
-      else {
+      if (!this.artworkReady.has(campaignKeyOf(c))) {
         notReady.push(c);
         iamLog(`campaign "${c.campaignId}" passed over: artwork not ready`);
+      } else if (this.campaignsFromCache && c.message.widget) {
+        // A game is never opened from a cached set. A message carries its own content, so a
+        // cached one is still correct; a game carries a pointer and fetches its content live, so
+        // a cached entry is a promise this SDK cannot keep. Dropped rather than deferred: the
+        // next live sync is what makes it openable again.
+        iamLog(
+          `game ${c.message.widget.gameCampaignId} skipped: the campaign set came from the cache, and a game must be confirmed live before it is opened`
+        );
+      } else {
+        displayable.push(c);
       }
     }
     if (notReady.length) this.maybeRefreshArtwork(notReady);
@@ -664,6 +684,17 @@ export class InAppMessagingService {
     url?: string
   ): void {
     if (campaign.isTest) return; // a dashboard test send reports nothing
+
+    // A game campaign is not a message campaign. Engagement is recorded through the challenge
+    // flow when the customer plays it, and an event sent here would attribute against a campaign
+    // id that is not a message — campaignId is 0 on every game entry. The display history is
+    // still recorded; only the reporting stops.
+    if (campaign.message.widget) {
+      iamLog(
+        `game ${campaign.message.widget.gameCampaignId} displayed; reporting nothing, as engagement is recorded through the challenge flow`
+      );
+      return;
+    }
     this.analytics.log(
       createMessageEvent({
         type,

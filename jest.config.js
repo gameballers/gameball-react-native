@@ -31,6 +31,13 @@ module.exports = {
       preset: '@react-native/jest-preset',
       testMatch: ['<rootDir>/src/**/__tests__/**/*.test.tsx'],
       modulePathIgnorePatterns: ignore,
+      moduleNameMapper: {
+        // The real one reaches for a native module through TurboModuleRegistry.getEnforcing,
+        // which throws outside an app — a reward campaign's view imports it, so without this the
+        // whole presentation suite fails to parse rather than failing an assertion.
+        '^react-native-webview$':
+          '<rootDir>/src/InAppMessaging/__tests__/support/react-native-webview-stub.tsx',
+      },
     },
   ],
 };

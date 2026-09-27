@@ -31,7 +31,7 @@ export interface Campaign {
  */
 export function campaignKeyOf(campaign: Campaign): CampaignKey {
   const widget = campaign.message.widget;
-  return widget === null ? messageKey(campaign.campaignId) : gameKey(widget.gameCampaignId);
+  return widget ? gameKey(widget.gameCampaignId) : messageKey(campaign.campaignId);
 }
 
 export function hasExpiredAt(campaign: Campaign, nowMs: number): boolean {
