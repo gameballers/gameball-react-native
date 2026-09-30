@@ -4,6 +4,26 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [Unreleased] 🎡
+
+> **Minor Release**: Game campaigns — a reward campaign opens itself over your app from an in-app trigger
+
+### ✨ Added
+- 🎡 **Game campaigns**: a spin the wheel, quiz or scratch and win the merchant set to open over your app arrives in the same sync as in-app messages and draws on the same surface. **Nothing to integrate** — a host already mounting `<GameballInAppMessages />` gets them
+- 🧩 **The campaign is the content**: the SDK opens the game itself and shows the card only once it has finished drawing, so the customer never sees a loading state
+- 🖥️ **Modal and fullscreen**: fullscreen insets its content into the safe area while the surface behind runs edge to edge
+- 🛡️ **Unknown kinds are skipped, never guessed at.** An entry whose `campaignType` or game type this version does not recognise is dropped with a log naming it, so a future kind degrades to silence rather than to a wrong display
+
+### 🔒 Changed
+- 🔑 **Display history is keyed by campaign kind and id.** Challenge ids and message campaign ids are separate sequences that overlap numerically, and every game entry arrives with `campaignId: 0` — so a bare number can no longer identify a campaign. Histories written by earlier releases are migrated on read; nothing is lost and no campaign re-shows
+- 📊 **Game campaigns report no in-app messaging telemetry.** Engagement is recorded through the normal challenge flow when the customer plays. Their display history is still kept, so a once-ever game stays once-ever
+- 🗂️ **A game is never opened from a cached campaign set.** A message carries its own content, so a cached one is still correct; a game carries a pointer and fetches its content live, so a cached entry is a promise the SDK cannot keep
+
+### ⚠️ Not yet supported
+- 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger
+
+---
+
 ## [4.0.0] - 2026-10-23 🎉
 
 > **Major Release**: Raised the minimum supported platform versions to iOS 15.0 and Android API 24, and added in-app messaging — an opt-in module that displays campaigns authored in the Gameball dashboard inside your app
