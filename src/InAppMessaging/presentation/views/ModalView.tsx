@@ -175,7 +175,10 @@ export function ModalView({
               <>
                 <ScrollView
                   style={styles.copyScroll}
-                  contentContainerStyle={styles.copy}
+                  contentContainerStyle={[
+                    styles.copy,
+                    message.buttons.length === 0 ? styles.copyLast : null,
+                  ]}
                 >
                   <Copy
                     header={message.header}
@@ -248,6 +251,9 @@ const styles = StyleSheet.create({
     paddingTop: ModalMetrics.contentPadding.top,
     paddingHorizontal: ModalMetrics.contentPadding.horizontal,
   },
+  /** The copy is the card's last block: with no buttons row beneath it, it carries its own
+   * inset there, or its last line runs into the card's bottom edge. */
+  copyLast: { paddingBottom: ModalMetrics.contentPadding.bottom },
   buttons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
