@@ -13,6 +13,8 @@ export type {
   Event,
   ShowProfileRequest,
   Callback,
+  WidgetEvent,
+  WidgetEventCallback,
 } from './types/Common';
 
 // Enums
