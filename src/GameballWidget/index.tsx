@@ -83,6 +83,11 @@ class GameballWidget extends React.Component<Props, State> {
   private static readonly EXTERNAL_BROWSER_FLAG = 'gbExternalBrowser=true';
   // Prefix of the postMessage the injected bridge sends for window.WidgetEvent.postEvent.
   private static readonly WIDGET_EVENT_PREFIX = 'widgetEvent:';
+  // postMessage the injected bridge sends for window.GameballWidget.closeWidget().
+  private static readonly CLOSE_WIDGET_MESSAGE = 'closeWidget:';
+
+  // Most recently mounted widget, so GameballApp.showProfile/hideProfile can reach it.
+  private static activeInstance: GameballWidget | null = null;
 
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
@@ -150,8 +155,24 @@ class GameballWidget extends React.Component<Props, State> {
     GameballWidget.customerId = customerId;
   }
 
+  /** Shows the mounted widget. Returns false when no <GameballWidget /> is mounted. */
+  static showActiveProfile(): boolean {
+    if (!GameballWidget.activeInstance) return false;
+    GameballWidget.activeInstance.showProfile();
+    return true;
+  }
+
+  /**
+   * Dismisses the mounted widget, if any. Backs both the widget-initiated
+   * window.GameballWidget.closeWidget() bridge and GameballApp.hideProfile().
+   */
+  static closeWidget() {
+    GameballWidget.activeInstance?.hideProfile();
+  }
+
   componentDidMount() {
     this._isMounted = true;
+    GameballWidget.activeInstance = this;
     // When the widget is used as a component (e.g. <GameballWidget externalLinkCallback={…}/>
     // + widgetRef.showProfile()), surface the prop to the static the nav handler reads.
     // Left untouched when the prop is absent so a callback set via GameballApp.init/showProfile
@@ -166,12 +187,20 @@ class GameballWidget extends React.Component<Props, State> {
 
   componentWillUnmount() {
     this._isMounted = false;
+    if (GameballWidget.activeInstance === this) {
+      GameballWidget.activeInstance = null;
+    }
   }
 
   onMessage = async (e: WebViewMessageEvent) => {
     const { data } = e.nativeEvent;
     if (data.startsWith(GameballWidget.WIDGET_EVENT_PREFIX)) {
       this.handleWidgetEvent(data.slice(GameballWidget.WIDGET_EVENT_PREFIX.length));
+      return;
+    }
+    if (data === GameballWidget.CLOSE_WIDGET_MESSAGE) {
+      // Widget-initiated close, posted via window.GameballWidget.closeWidget().
+      this.hideProfile();
       return;
     }
     if (Platform.OS === 'ios') return;
@@ -308,6 +337,11 @@ class GameballWidget extends React.Component<Props, State> {
             'widgetEvent:' + (typeof raw === 'string' ? raw : JSON.stringify(raw))
           );
         };
+        // Bridge widget-initiated close: window.GameballWidget.closeWidget() dismisses the widget.
+        window.GameballWidget = window.GameballWidget || {};
+        window.GameballWidget.closeWidget = function () {
+          window.ReactNativeWebView.postMessage('closeWidget:');
+        };
         true;
         "
       />
@@ -331,6 +365,7 @@ class GameballWidget extends React.Component<Props, State> {
   }
 
   hideProfile() {
+    if (!this.state.visible) return;
     Animated.timing(this._slideAnim, {
       toValue: SCREEN_HEIGHT,
       duration: 250,
