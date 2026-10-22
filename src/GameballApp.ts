@@ -217,13 +217,22 @@ export class GameballApp {
       widgetEventCallback: request.widgetEventCallback,
     });
 
-    // Create and show widget instance
-    const widget = new GameballWidget({});
-    widget.showProfile();
+    // Show the mounted <GameballWidget /> with the configuration above
+    if (!GameballWidget.showActiveProfile() && __DEV__) {
+      console.warn('[GameballApp] showProfile: no <GameballWidget /> is mounted to show');
+    }
 
     // showProfile renders a webview (never hits the backend), so log it here.
     // Full request as-is (the callbacks are functions — JSON.stringify drops them).
     GameballLogger.log('sdk.showProfile', request);
+  }
+
+  /**
+   * Hide the currently shown profile widget. No-op when nothing is shown.
+   * Counterpart to showProfile().
+   */
+  hideProfile(): void {
+    GameballWidget.closeWidget();
   }
 
   /**
