@@ -405,7 +405,7 @@ class GameballWidget extends React.Component<Props, State> {
       `&sdk=React/${package_json.version}` +
       `${mainColor ? `&main=${enc(mainColor)}` : ''}` +
       `${openDetail ? `&openDetail=${enc(openDetail)}` : ''}` +
-      `${hideNavigation ? `&hideNavigation=${hideNavigation}` : ''}` +
+      `${hideNavigation != null ? `&hideNavigation=${hideNavigation}` : ''}` +
       `${mobile ? `&mobile=${enc(mobile)}` : ''}` +
       `${email ? `&email=${enc(email)}` : ''}`;
 
