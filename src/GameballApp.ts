@@ -380,11 +380,11 @@ export class GameballApp {
   }
 
   private processCustomerAttributes(request: InitializeCustomerRequest): any {
-    // Create internal request with osType and default isGuest
+    // Create internal request with osType and isGuest
     const internalRequest = {
       ...request,
       osType: this.os,  // Always set internally
-      isGuest: request.isGuest ?? false,  // Default to false if not provided
+      isGuest: false,  // Hardcoded: the SDK never initializes a customer as a guest
     };
 
     // If customerAttributes is null/undefined, initialize with default channel
