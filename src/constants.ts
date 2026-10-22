@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   INTEGRATIONS: '/api/v4.0/integrations',
   CUSTOMERS: '/customers',
   EVENTS: '/events',
+  PUSH_CLICK: '/mobile/push-click',
   MOBILE_LOGS: '/mobile/logs',
 } as const;
 
@@ -21,6 +22,7 @@ export const ERROR_MESSAGES = {
     'GameballApp must be initialized before use. Call init() first.',
   INITIALIZATION_FAILED: 'Initialization failed',
   EVENT_SENDING_FAILED: 'Event sending failed',
+  PUSH_CLICK_FAILED: 'Push click reporting failed',
   INVALID_LANGUAGE: 'Language must be a two-letter code (e.g., "en", "ar")',
   FETCH_BOT_SETTINGS_FAILED: 'Failed to fetch bot settings. Status:',
 } as const;

@@ -201,6 +201,53 @@ export class GameballApp {
   }
 
   /**
+   * Handle a tap on a push notification. Call it from the app's own notification handler
+   * with the notification's data payload (e.g. `remoteMessage.data` from
+   * `onNotificationOpenedApp` / `getInitialNotification`).
+   *
+   * When the notification is a Gameball one and carries a click token, the tap is reported
+   * to Gameball to count the campaign click; the optional callback receives that report's result.
+   * @param payload - The notification's data payload
+   * @param callback - Optional callback receiving whether the report succeeded
+   * @param sessionToken - Optional session token for this request.
+   *                       If provided, overrides the global sessionToken.
+   *                       If not provided (undefined), clears the global sessionToken.
+   * @returns true when the notification is a Gameball one
+   */
+  handlePushClick(
+    payload: Record<string, any> | null | undefined,
+    callback?: Callback<boolean>,
+    sessionToken?: string | null
+  ): boolean {
+    if (String(payload?.isGB).toLowerCase() !== 'true') {
+      return false;
+    }
+
+    const token = payload?.gbClickToken;
+
+    // Override or clear sessionToken - always update on every call
+    this.sessionToken = sessionToken || null;
+
+    if (!this.isInitialized) {
+      callback?.onError?.(new Error(ERROR_MESSAGES.NOT_INITIALIZED));
+      return true;
+    }
+
+    if (typeof token !== 'string' || token.trim() === '') {
+      return true;
+    }
+
+    this.makeRequest(API_ENDPOINTS.PUSH_CLICK, { clickToken: token }).then(
+      () => callback?.onSuccess?.(true),
+      (error) =>
+        callback?.onError?.(
+          error instanceof Error ? error : new Error(ERROR_MESSAGES.PUSH_CLICK_FAILED)
+        )
+    );
+    return true;
+  }
+
+  /**
    * Show the Gameball profile widget
    * @param request - Profile display configuration
    * @param sessionToken - Optional session token for this request.
