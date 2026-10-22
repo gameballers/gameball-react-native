@@ -11,10 +11,11 @@ import {
 } from '../evaluation/select-campaign';
 import { iamLog } from '../log';
 import type { Campaign } from '../models/campaign';
-import type {
-  ClickAction,
-  InAppMessage,
-  MessageButton,
+import {
+  artworkUrlsOf,
+  type ClickAction,
+  type InAppMessage,
+  type MessageButton,
 } from '../models/message';
 import { quietHoursContains, type QuietHours } from '../models/quiet-hours';
 import {
@@ -199,6 +200,7 @@ export class InAppMessagingService {
     this.presenter.dismiss();
     this.campaigns = [];
     this.artworkReady = new Set();
+    this.prefetcher.retainOnly(new Set()); // the artwork is in memory; nothing should outlive a logout there
     this.presentationInFlight = false;
     this.artworkRefreshInFlight = false;
     this.lastPausedAt = null;
@@ -369,6 +371,11 @@ export class InAppMessagingService {
   /** Warms every campaign's artwork concurrently; the impression must never count something the user could not see. */
   private async prefetchArtwork(): Promise<void> {
     const campaigns = this.campaigns;
+    // Declared before warming, never after: the prefetcher drops a download it was not asked to
+    // keep, so an image that first arrives in this sync would otherwise never be held.
+    this.prefetcher.retainOnly(
+      new Set(campaigns.flatMap((c) => artworkUrlsOf(c.message)))
+    );
     this.artworkCheckedAt = this.clock();
     if (campaigns.length === 0) {
       this.artworkReady = new Set();

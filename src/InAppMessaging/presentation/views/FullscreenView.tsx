@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Animated,
   Image,
@@ -9,6 +9,8 @@ import {
 } from 'react-native';
 import type { InAppMessage, MessageButton } from '../../models/message';
 import { FullscreenMetrics, MessageMetrics } from '../metrics';
+import type { MessageArtwork } from '../presenter';
+import { Stage, useReveal } from './reveal';
 import {
   CloseGlyph,
   closeColorFor,
@@ -30,22 +32,42 @@ import {
  */
 export function FullscreenView({
   message,
+  artwork,
   onShown,
+  onFailed,
   onPress,
   onDismiss,
   topInset,
   bottomInset,
 }: {
   message: InAppMessage;
+  artwork: MessageArtwork;
   onShown: () => void;
+  /** The artwork never painted; take the message away having never shown it. */
+  onFailed: () => void;
   onPress: (button: MessageButton | null) => void;
   onDismiss: () => void;
   topInset: number;
   bottomInset: number;
 }) {
+  const image = artwork.image;
   const opacity = useRef(new Animated.Value(0)).current;
-  const imageOnly =
-    message.layout === 'image_only' && message.imageUrl !== null;
+  const { revealed, onLayout, onImageLoad, onImageError } = useReveal(
+    image !== null,
+    onShown,
+    onFailed
+  );
+  useEffect(() => {
+    if (!revealed) {
+      return;
+    }
+    Animated.timing(opacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [revealed, opacity]);
+  const imageOnly = message.layout === 'image_only' && image !== null;
 
   const buttons = message.buttons.map((button, index) => (
     <MessageActionButton
@@ -62,120 +84,133 @@ export function FullscreenView({
   ));
 
   return (
-    <Animated.View
-      testID="gb-iam-fullscreen"
-      accessibilityRole="alert"
-      accessibilityViewIsModal
-      onLayout={() => {
-        onShown();
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }).start();
-      }}
-      style={[
-        StyleSheet.absoluteFill,
-        {
-          opacity,
-          paddingTop: imageOnly ? 0 : topInset,
-          paddingBottom: imageOnly ? 0 : bottomInset,
-          backgroundColor:
-            message.style.backgroundColor ?? MessageMetrics.defaultSurface,
-        },
-      ]}
-    >
-      <Pressable
-        disabled={message.clickAction === null}
-        onPress={() => onPress(null)}
-        style={StyleSheet.absoluteFill}
-        testID="gb-iam-surface"
-      >
-        {message.imageUrl ? (
-          <Image
-            testID="gb-iam-image"
-            source={{ uri: message.imageUrl }}
-            style={
-              imageOnly
-                ? styles.fill
-                : {
-                    width: '100%',
-                    flexBasis: `${
-                      FullscreenMetrics.imageHeightFraction * 100
-                    }%`,
-                    flexGrow: 0,
-                  }
-            }
-            resizeMode="cover"
-          />
-        ) : null}
-      </Pressable>
-
-      {imageOnly ? null : (
-        // One column, the full height of the surface — which is the box the artwork's half is
-        // measured against. Reserving that half inside a shorter column (one the buttons had
-        // already been subtracted from) left the copy starting above the image's bottom edge and
-        // painting over it, since the copy is drawn after the artwork.
-        <View style={styles.stack} pointerEvents="box-none">
-          {message.imageUrl ? (
-            <View testID="gb-iam-image-spacer" style={styles.imageSpacer} />
-          ) : null}
-          <ScrollView contentContainerStyle={styles.copy}>
-            <Copy
-              header={message.header}
-              body={message.body}
-              style={message.style}
-              headerFontSize={FullscreenMetrics.headerFontSize}
-              headerLineHeight={FullscreenMetrics.headerLineHeight}
-              bodyFontSize={FullscreenMetrics.bodyFontSize}
-              bodyLineHeight={FullscreenMetrics.bodyLineHeight}
-              spacing={FullscreenMetrics.headerToBodySpacing}
-            />
-          </ScrollView>
-          {message.buttons.length > 0 ? (
-            <View testID="gb-iam-buttons" style={styles.buttons}>
-              {buttons}
-            </View>
-          ) : null}
-        </View>
-      )}
-
-      {imageOnly && message.buttons.length > 0 ? (
-        <View
-          testID="gb-iam-buttons"
+    <View style={StyleSheet.absoluteFill}>
+      {/* The Modal holds every touch from the moment it mounts, so the app dims at once — the
+          customer can see why their taps stop landing — and the surface fades in over it whole,
+          once its artwork has painted. Covered entirely from then on. */}
+      <View
+        testID="gb-iam-scrim"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            backgroundColor:
+              message.style.scrimColor ?? MessageMetrics.defaultScrim,
+          },
+        ]}
+      />
+      <Stage revealed={revealed}>
+        <Animated.View
+          testID="gb-iam-fullscreen"
+          accessibilityRole="alert"
+          accessibilityViewIsModal
+          onLayout={onLayout}
           style={[
-            styles.buttons,
+            StyleSheet.absoluteFill,
             {
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              bottom: 0,
-              paddingHorizontal:
-                FullscreenMetrics.imageOnlyButtonsPadding.horizontal,
-              paddingBottom:
-                FullscreenMetrics.imageOnlyButtonsPadding.bottom + bottomInset,
-              paddingTop: 0,
+              opacity,
+              paddingTop: imageOnly ? 0 : topInset,
+              paddingBottom: imageOnly ? 0 : bottomInset,
+              backgroundColor:
+                message.style.backgroundColor ?? MessageMetrics.defaultSurface,
             },
           ]}
         >
-          {buttons}
-        </View>
-      ) : null}
+          <Pressable
+            disabled={message.clickAction === null}
+            onPress={() => onPress(null)}
+            style={StyleSheet.absoluteFill}
+            testID="gb-iam-surface"
+          >
+            {image ? (
+              <Image
+                testID="gb-iam-image"
+                source={{ uri: image.uri }}
+                style={
+                  imageOnly
+                    ? styles.fill
+                    : {
+                        width: '100%',
+                        flexBasis: `${
+                          FullscreenMetrics.imageHeightFraction * 100
+                        }%`,
+                        flexGrow: 0,
+                      }
+                }
+                resizeMode="cover"
+                onLoad={onImageLoad}
+                onError={onImageError}
+              />
+            ) : null}
+          </Pressable>
 
-      {message.showCloseButton ? (
-        <CloseGlyph
-          accessibilityLabel="Close"
-          color={closeColorFor(message.style)}
-          onPress={onDismiss}
-          style={{
-            top: FullscreenMetrics.closeInset + topInset,
-            // Mirrored by hand: React Native does not flip a physical `right` under RTL, and the
-            // web SDK places this with `inset-inline-end`, which does.
-            ...closeInlineEnd(FullscreenMetrics.closeInset),
-          }}
-        />
-      ) : null}
-    </Animated.View>
+          {imageOnly ? null : (
+            // One column, the full height of the surface — which is the box the artwork's half is
+            // measured against. Reserving that half inside a shorter column (one the buttons had
+            // already been subtracted from) left the copy starting above the image's bottom edge and
+            // painting over it, since the copy is drawn after the artwork.
+            <View style={styles.stack} pointerEvents="box-none">
+              {image ? (
+                <View testID="gb-iam-image-spacer" style={styles.imageSpacer} />
+              ) : null}
+              <ScrollView contentContainerStyle={styles.copy}>
+                <Copy
+                  header={message.header}
+                  body={message.body}
+                  style={message.style}
+                  headerFontSize={FullscreenMetrics.headerFontSize}
+                  headerLineHeight={FullscreenMetrics.headerLineHeight}
+                  bodyFontSize={FullscreenMetrics.bodyFontSize}
+                  bodyLineHeight={FullscreenMetrics.bodyLineHeight}
+                  spacing={FullscreenMetrics.headerToBodySpacing}
+                />
+              </ScrollView>
+              {message.buttons.length > 0 ? (
+                <View testID="gb-iam-buttons" style={styles.buttons}>
+                  {buttons}
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {imageOnly && message.buttons.length > 0 ? (
+            <View
+              testID="gb-iam-buttons"
+              style={[
+                styles.buttons,
+                {
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  paddingHorizontal:
+                    FullscreenMetrics.imageOnlyButtonsPadding.horizontal,
+                  paddingBottom:
+                    FullscreenMetrics.imageOnlyButtonsPadding.bottom +
+                    bottomInset,
+                  paddingTop: 0,
+                },
+              ]}
+            >
+              {buttons}
+            </View>
+          ) : null}
+
+          {message.showCloseButton ? (
+            <CloseGlyph
+              accessibilityLabel="Close"
+              color={closeColorFor(message.style)}
+              onPress={onDismiss}
+              style={{
+                top: FullscreenMetrics.closeInset + topInset,
+                // Mirrored by hand: React Native does not flip a physical `right` under RTL, and the
+                // web SDK places this with `inset-inline-end`, which does.
+                ...closeInlineEnd(FullscreenMetrics.closeInset),
+              }}
+            />
+          ) : null}
+        </Animated.View>
+      </Stage>
+    </View>
   );
 }
 

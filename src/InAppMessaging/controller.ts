@@ -66,11 +66,14 @@ function isOpenable(url: string): boolean {
  * messaging, and the SDK's other features do not need to know it exists.
  */
 export class InAppMessagingController {
+  /** One store of artwork: the service fills it at sync, and the presenter draws from it. */
+  private readonly artwork = new ImageArtworkPrefetcher();
   readonly presenter = new ReactMessagePresenter({
     orientation: () => {
       const { width, height } = Dimensions.get('window');
       return width > height ? 'landscape' : 'portrait';
     },
+    artwork: (url) => this.artwork.artworkFor(url),
   });
 
   private config: InAppMessagingConfig | null = null;
@@ -204,7 +207,7 @@ export class InAppMessagingController {
           store,
           send: (id, events) => api.sendMessageEvents(id, events),
         }),
-        prefetcher: new ImageArtworkPrefetcher(),
+        prefetcher: this.artwork,
         variables: new CachingVariableSource({
           store,
           fetcher: (id) => api.fetchVariables(id),

@@ -1,10 +1,25 @@
 import { iamLog } from '../log';
 import type { InAppMessage } from '../models/message';
-import type { MessagePresenter, PresentCallbacks } from './presenter';
+import type {
+  Artwork,
+  MessageArtwork,
+  MessagePresenter,
+  PresentCallbacks,
+} from './presenter';
 
 /** What the host component renders, and how it reports back. */
 export interface PresentedMessage {
+  /**
+   * Distinct for every presentation, so the host draws each in a view of its own.
+   *
+   * A dismissal can present the next message in the same update — the service does exactly that
+   * for a parked one — and without a key of its own the next message lands in the view the last
+   * one is leaving, inheriting its reveal: never revealed, or revealed before its artwork painted.
+   */
+  key: number;
   message: InAppMessage;
+  /** The images the message draws, already in memory. The view never fetches its own. */
+  artwork: MessageArtwork;
   /** Called by the view on its first painted frame. The impression is counted here. */
   onShown(): void;
   callbacks: PresentCallbacks;
@@ -27,6 +42,8 @@ type Listener = (current: PresentedMessage | null) => void;
 export interface ReactMessagePresenterOptions {
   /** The screen's current orientation, when the host can report it. */
   orientation?: () => 'portrait' | 'landscape' | undefined;
+  /** The artwork held for a url, or null when it is not held. */
+  artwork?: (url: string) => Artwork | null;
 }
 
 export class ReactMessagePresenter implements MessagePresenter {
@@ -37,12 +54,15 @@ export class ReactMessagePresenter implements MessagePresenter {
   private spares: Listener[] = [];
   private autoDismiss: ReturnType<typeof setTimeout> | null = null;
   private shown = false;
+  private presentations = 0;
   private readonly orientation:
     | (() => 'portrait' | 'landscape' | undefined)
     | null;
+  private readonly artwork: (url: string) => Artwork | null;
 
   constructor(options: ReactMessagePresenterOptions = {}) {
     this.orientation = options.orientation ?? null;
+    this.artwork = options.artwork ?? (() => null);
   }
 
   /**
@@ -60,6 +80,21 @@ export class ReactMessagePresenter implements MessagePresenter {
     }
     const current = this.orientation();
     return current === undefined || current === message.orientation;
+  }
+
+  /**
+   * Every image the message carries, from memory, or null when any of them is not there.
+   *
+   * The service only selects a campaign whose artwork loaded, so this is the last line rather than
+   * the gate: a view handed a url instead of bytes would fetch it while the customer watched.
+   */
+  private heldArtwork(message: InAppMessage): MessageArtwork | null {
+    const image = message.imageUrl ? this.artwork(message.imageUrl) : null;
+    const icon = message.iconUrl ? this.artwork(message.iconUrl) : null;
+    if ((message.imageUrl && !image) || (message.iconUrl && !icon)) {
+      return null;
+    }
+    return { image, icon };
   }
 
   /** True while a host component is mounted. The service defers displays until it is. */
@@ -142,9 +177,18 @@ export class ReactMessagePresenter implements MessagePresenter {
       );
       return false;
     }
+    const artwork = this.heldArtwork(message);
+    if (!artwork) {
+      iamLog(
+        `message "${message.id}" has artwork that is not in memory; not drawing it with a hole`
+      );
+      return false;
+    }
     this.shown = false;
     const entry: PresentedMessage = {
+      key: ++this.presentations,
       message,
+      artwork,
       callbacks,
       onShown: () => {
         // The view reports every layout pass; only the first one is an impression.

@@ -79,8 +79,11 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       return (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           <SlideupView
+            key={current.key}
             message={message}
+            artwork={current.artwork}
             onShown={current.onShown}
+            onFailed={dismiss}
             onPress={press}
             onDismiss={dismiss}
             topInset={topInset}
@@ -114,16 +117,22 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       >
         {message.type === 'modal' ? (
           <ModalView
+            key={current.key}
             message={message}
+            artwork={current.artwork}
             onShown={current.onShown}
+            onFailed={dismiss}
             onPress={press}
             onDismiss={dismiss}
             onScrim={dismiss}
           />
         ) : (
           <FullscreenView
+            key={current.key}
             message={message}
+            artwork={current.artwork}
             onShown={current.onShown}
+            onFailed={dismiss}
             onPress={press}
             onDismiss={dismiss}
             topInset={topInset}
