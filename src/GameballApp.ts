@@ -279,6 +279,7 @@ export class GameballApp {
       hideNavigation: request.hideNavigation,
       modal: true,
       mainColor: this.mainColor || undefined,
+      showCloseButton: request.showCloseButton,
       closeButtonColor: request.closeButtonColor,
       mobile: request.mobile,
       email: request.email,
