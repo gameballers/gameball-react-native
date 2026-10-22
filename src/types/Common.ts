@@ -34,6 +34,7 @@ export interface InitializeCustomerRequest {
   customerAttributes?: CustomerAttributes;
   deviceToken?: string;
   pushProvider?: PushProvider;
+  /** @deprecated Ignored: the SDK always initializes customers as registered. */
   isGuest?: boolean;
 }
 
