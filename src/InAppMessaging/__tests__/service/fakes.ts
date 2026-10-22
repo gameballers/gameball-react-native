@@ -116,6 +116,7 @@ export class FakePrefetcher implements ArtworkPrefetcher {
     );
     return urls.every((u) => !this.failing.has(u));
   }
+  retainOnly(_urls: ReadonlySet<string>): void {}
 }
 
 export class FakeVariables implements VariableSource {

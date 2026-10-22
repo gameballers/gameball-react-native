@@ -35,6 +35,15 @@ function messageOf(overrides: Partial<InAppMessage> = {}): InAppMessage {
   } as unknown as InAppMessage;
 }
 
+/** What the presenter hands a view for a message: its images, already held in memory. */
+function artworkOf(message: InAppMessage) {
+  const held = { uri: 'data:image/png;base64,YXJ0', width: 1200, height: 800 };
+  return {
+    image: message.imageUrl ? held : null,
+    icon: message.iconUrl ? held : null,
+  };
+}
+
 function mount(element: React.ReactElement): TestRenderer.ReactTestRenderer {
   let tree!: TestRenderer.ReactTestRenderer;
   act(() => {
@@ -58,7 +67,9 @@ function fullscreenOrModal(type: 'modal' | 'fullscreen') {
     type === 'fullscreen' ? (
       <FullscreenView
         message={message}
+        artwork={artworkOf(message)}
         onShown={noop}
+        onFailed={noop}
         onPress={noop}
         onDismiss={noop}
         topInset={0}
@@ -67,7 +78,9 @@ function fullscreenOrModal(type: 'modal' | 'fullscreen') {
     ) : (
       <ModalView
         message={message}
+        artwork={artworkOf(message)}
         onShown={noop}
+        onFailed={noop}
         onPress={noop}
         onDismiss={noop}
         onScrim={noop}
@@ -113,7 +126,9 @@ function fullscreen(message: InAppMessage) {
   return mount(
     <FullscreenView
       message={message}
+      artwork={artworkOf(message)}
       onShown={noop}
+      onFailed={noop}
       onPress={noop}
       onDismiss={noop}
       topInset={0}
@@ -176,7 +191,9 @@ describe('the close affordances each type offers', () => {
           imageUrl: null,
           showCloseButton: true,
         } as never)}
+        artwork={{ image: null, icon: null }}
         onShown={noop}
+        onFailed={noop}
         onPress={noop}
         onDismiss={noop}
         topInset={0}
@@ -241,7 +258,9 @@ describe('SlideupView', () => {
     const tree = mount(
       <SlideupView
         message={messageOf({ type: 'slideup', imageUrl: null })}
+        artwork={{ image: null, icon: null }}
         onShown={noop}
+        onFailed={noop}
         onPress={noop}
         onDismiss={noop}
         topInset={0}

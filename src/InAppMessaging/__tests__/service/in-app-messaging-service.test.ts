@@ -3,6 +3,8 @@ import { InMemoryFrequencyCap } from '../../evaluation/frequency-cap';
 import type { Campaign } from '../../models/campaign';
 import type { PropertyFilter } from '../../models/property-filter';
 import type { SyncResult } from '../../source/sync-result';
+import { ImageArtworkPrefetcher } from '../../presentation/artwork-prefetcher';
+import type { Artwork, ArtworkPrefetcher } from '../../presentation/presenter';
 import { campaign, message, T0 } from '../helpers/fixtures';
 import {
   FakeCache,
@@ -31,7 +33,12 @@ const sync = (
 
 function harness(
   result: SyncResult | (() => SyncResult) | Error,
-  opts: { overlayOpen?: () => boolean; hasSurface?: () => boolean } = {}
+  opts: {
+    overlayOpen?: () => boolean;
+    hasSurface?: () => boolean;
+    /** The real one, where what it holds is the point of the test. */
+    artwork?: ArtworkPrefetcher;
+  } = {}
 ) {
   let now = T0;
   const source = new FakeSource(result);
@@ -50,7 +57,7 @@ function harness(
     presenter,
     analytics,
     campaignCache: cache,
-    prefetcher,
+    prefetcher: opts.artwork ?? prefetcher,
     variables,
     frequencyCap: cap,
     isHostOverlayOpen: opts.overlayOpen ?? (() => false),
@@ -554,6 +561,59 @@ describe('InAppMessagingService', () => {
       h.service.onCustomEvent('e');
       await jest.advanceTimersByTimeAsync(0);
       expect(h.prefetcher.calls.length).toBe(before + 1);
+    });
+
+    const A = 'https://cdn/a.png';
+    const B = 'https://cdn/b.png';
+    const C = 'https://cdn/c.png';
+    /** The real prefetcher, over a loader that holds every url it is asked for. */
+    function inMemory() {
+      return new ImageArtworkPrefetcher({
+        load: async (url): Promise<Artwork> => ({
+          uri: `data:image/png;base64,${url.length}`,
+          width: 2,
+          height: 1,
+        }),
+      });
+    }
+
+    it('holds the artwork of the campaigns it holds, and lets go of all of it on stop', async () => {
+      const artwork = inMemory();
+      const h = harness(
+        sync([
+          campaign(1, { message: message({ id: '1', imageUrl: A }) }),
+          campaign(2, { message: message({ id: '2', iconUrl: B }) }),
+        ]),
+        { artwork }
+      );
+      await h.service.start({ customerId: 'c1' });
+      expect(artwork.artworkFor(A)).not.toBeNull();
+      expect(artwork.artworkFor(B)).not.toBeNull();
+
+      // A logout: the next customer must not inherit this one's images, held for as long as the
+      // app runs.
+      h.service.stop();
+      expect(artwork.artworkFor(A)).toBeNull();
+      expect(artwork.artworkFor(B)).toBeNull();
+    });
+
+    it('displays a campaign whose artwork first arrives in a later sync, and lets go of what that sync dropped', async () => {
+      const artwork = inMemory();
+      let held = [campaign(1, { message: message({ id: '1', imageUrl: A }) })];
+      const h = harness(() => sync(held), { artwork });
+      await h.service.start({ customerId: 'c1' });
+      expect(h.presenter.shownIds).toEqual(['1']);
+      h.presenter.paint();
+      h.presenter.dismiss();
+
+      held = [campaign(3, { message: message({ id: '3', imageUrl: C }) })];
+      h.service.onAppPaused();
+      h.advance(31 * 60_000);
+      h.service.onAppResumed();
+      await jest.advanceTimersByTimeAsync(0);
+
+      expect(h.presenter.shownIds).toEqual(['1', '3']);
+      expect(artwork.artworkFor(A)).toBeNull();
     });
   });
 

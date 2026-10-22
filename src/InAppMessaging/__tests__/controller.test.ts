@@ -1,5 +1,11 @@
 import { InAppMessagingController } from '../controller';
-import { openedUrls, resetReactNativeStub } from './support/react-native-stub';
+import type { PresentedMessage } from '../presentation/message-presenter';
+import { installFileReader, stubBlob } from './support/file-reader-stub';
+import {
+  imageSizes,
+  openedUrls,
+  resetReactNativeStub,
+} from './support/react-native-stub';
 
 /**
  * The controller is the React Native-specific orchestration layer: it owns the lifecycle the host
@@ -129,5 +135,83 @@ describe('lifecycle', () => {
     expect(
       (c as unknown as { preferredLanguage: string | null }).preferredLanguage
     ).toBeNull();
+  });
+});
+
+describe('artwork', () => {
+  const IMAGE = 'https://cdn.test/hero.png';
+  const HELD = 'data:image/png;base64,aGVybw==';
+  const realFetch = globalThis.fetch;
+  let removeFileReader = () => {};
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    removeFileReader();
+  });
+
+  /** One modal with an image, shown at session start — the shape the sync endpoint returns. */
+  const syncBody = JSON.stringify({
+    cooldownSeconds: 30,
+    quietHours: null,
+    campaignOrdering: null,
+    messages: [
+      {
+        campaignId: 1,
+        variationId: 9,
+        dispatchId: 'd-1',
+        name: 'Hero',
+        priority: 2,
+        messageType: 2,
+        trigger: {
+          type: 'session_start',
+          repeatable: false,
+          minIntervalSeconds: null,
+        },
+        contentMode: 'prerendered',
+        content: { closeBehaviour: 'both', imageUrl: IMAGE, buttons: null },
+        locale: { header: 'H', message: 'B', buttons: null },
+        isTest: false,
+        expiresAt: null,
+      },
+    ],
+  });
+
+  it('hands the presenter the very images the service loaded, so an image message reaches the screen', async () => {
+    removeFileReader = installFileReader();
+    imageSizes.set(HELD, { width: 1200, height: 800 });
+    const serve = async (input: string): Promise<unknown> => {
+      if (input === IMAGE) {
+        return {
+          ok: true,
+          status: 200,
+          blob: async () => stubBlob('aGVybw=='),
+        };
+      }
+      if (input.endsWith('/inapp-messages/sync')) {
+        return { ok: true, status: 200, text: async () => syncBody };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '{}',
+        json: async () => ({}),
+      };
+    };
+    globalThis.fetch = jest.fn(serve) as unknown as typeof fetch;
+
+    const c = controller();
+    const screen: { entry: PresentedMessage | null } = { entry: null };
+    c.presenter.attach((entry) => {
+      screen.entry = entry;
+    });
+    await c.start({ customerId: 'c1' });
+
+    expect(screen.entry?.message.imageUrl).toBe(IMAGE);
+    expect(screen.entry?.artwork.image).toEqual({
+      uri: HELD,
+      width: 1200,
+      height: 800,
+    });
+    c.stop();
   });
 });

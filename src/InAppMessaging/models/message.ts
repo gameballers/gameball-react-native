@@ -65,6 +65,13 @@ export interface InAppMessage {
   style: MessageStyle;
 }
 
+/** Every image the message carries. All of them must be in memory before it may display. */
+export function artworkUrlsOf(message: InAppMessage): string[] {
+  return [message.imageUrl, message.iconUrl].filter(
+    (url): url is string => !!url
+  );
+}
+
 /** The same message with different text. Personalisation is the only caller. */
 export function withText(
   message: InAppMessage,

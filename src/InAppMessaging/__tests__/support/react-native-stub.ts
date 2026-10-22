@@ -7,8 +7,25 @@
  */
 type Listener = (...args: unknown[]) => void;
 
+/** What Image.getSize measures each uri as. A uri not listed is not an image, and fails. */
+export const imageSizes = new Map<string, { width: number; height: number }>();
+
 export const Image = {
-  prefetch: (_url: string): Promise<boolean> => Promise.resolve(true),
+  /** Answers on a later tick, as it does on a device. */
+  getSize: (
+    uri: string,
+    success: (width: number, height: number) => void,
+    failure?: (error: Error) => void
+  ): void => {
+    Promise.resolve().then(() => {
+      const size = imageSizes.get(uri);
+      if (size) {
+        success(size.width, size.height);
+      } else {
+        failure?.(new Error(`"${uri}" is not an image`));
+      }
+    });
+  },
 };
 
 export const Platform = { OS: 'ios' as 'ios' | 'android' };
@@ -48,6 +65,7 @@ export function setWindowSize(width: number, height: number): void {
 
 export function resetReactNativeStub(): void {
   openedUrls.length = 0;
+  imageSizes.clear();
   windowSize = { width: 390, height: 844 };
   dimensionListeners.clear();
   Platform.OS = 'ios';

@@ -56,6 +56,28 @@ describe('ReactMessagePresenter', () => {
     expect(cb.calls).toEqual(['shown']);
   });
 
+  it('refuses a message whose artwork is not held, rather than draw it with a hole', () => {
+    const held = { uri: 'data:image/png;base64,QQ==', width: 2, height: 1 };
+    const presenter = new ReactMessagePresenter({
+      artwork: (url) => (url === 'https://cdn/held.png' ? held : null),
+    });
+    const mounted = host(presenter);
+    const cb = callbacks();
+
+    const halfHeld = message({
+      imageUrl: 'https://cdn/held.png',
+      iconUrl: 'https://cdn/gone.png',
+    });
+    expect(presenter.present(halfHeld, cb)).toBe(false);
+    expect(mounted.current).toBeNull();
+    expect(presenter.isShowing).toBe(false);
+
+    expect(
+      presenter.present(message({ imageUrl: 'https://cdn/held.png' }), cb)
+    ).toBe(true);
+    expect(mounted.current?.artwork).toEqual({ image: held, icon: null });
+  });
+
   it('refuses a second message while one is showing', () => {
     const presenter = new ReactMessagePresenter();
     host(presenter);

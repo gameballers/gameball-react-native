@@ -4,6 +4,18 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [Unreleased]
+
+### 🐛 Fixed
+- 🖼️ **A message with an image appears whole, from its first frame.** An image-with-text modal could open with only its copy and buttons, then grow when its image arrived seconds later — and its impression was counted before the image was on screen. Every campaign's artwork is now downloaded into memory at sync, with its size, and a campaign may display only once all of its images are held. When it displays, its layout is final from the first frame and the message enters only once its image has painted; the impression is counted at that moment and not before. A modal or full screen dims the app the instant it opens — its Modal holds the screen's touches from then on, and the backdrop shows why — and the card comes in over it whole. Slide-up icons and full-screen artwork are held to the same rule
+- 🧱 **Artwork that cannot be drawn takes its message away unshown**: no impression, the frequency cap untouched, and the campaign gets another chance at its next trigger
+- 🔁 **A message presented the instant another one leaves gets a view of its own.** It could land in the view the last one was leaving and inherit its state, skipping its own entrance and impression
+
+### 📝 Notes
+- 💾 **Campaign artwork is held in memory** — about a third more than the image's file size — for as long as a synced campaign carries it, and released when the campaign leaves the sync or messaging stops
+
+---
+
 ## [3.4.0] - 2026-09-15 💬
 
 > **Minor Release**: In-app messaging — an opt-in module for campaigns authored in the Gameball dashboard. No existing API changed; integrations that do not opt in are unaffected.
