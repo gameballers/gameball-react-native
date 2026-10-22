@@ -134,6 +134,8 @@ class GameballWidget extends React.Component<Props, State> {
       hideNavigation,
       modal,
       showCloseButton,
+      closeButtonColor: closeButtonColor || null,
+      sessionToken,
       customerId: customerId ?? null,
       mobile,
       email,
@@ -141,14 +143,8 @@ class GameballWidget extends React.Component<Props, State> {
       widgetEventCallback,
     });
 
-    if (sessionToken) {
-      GameballWidget.sessionToken = sessionToken;
-    }
     if (mainColor) {
       GameballWidget.mainColor = mainColor;
-    }
-    if (closeButtonColor) {
-      GameballWidget.closeButtonColor = closeButtonColor;
     }
   }
   static initializeCustomer(customerId: string) {
