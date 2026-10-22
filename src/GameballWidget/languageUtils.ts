@@ -42,7 +42,9 @@ export class LanguageUtils {
     preferredLang?: string | null,
     override?: string | null
   ): string {
-    const lang = [override, preferredLang, globalLang].find((l) => l && l.trim() !== '');
+    const lang = [override, preferredLang, globalLang].find(
+      (l) => l && l.trim() !== ''
+    );
     return this.normalize(lang ?? 'en');
   }
 }

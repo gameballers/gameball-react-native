@@ -195,7 +195,9 @@ class GameballWidget extends React.Component<Props, State> {
   onMessage = async (e: WebViewMessageEvent) => {
     const { data } = e.nativeEvent;
     if (data.startsWith(GameballWidget.WIDGET_EVENT_PREFIX)) {
-      this.handleWidgetEvent(data.slice(GameballWidget.WIDGET_EVENT_PREFIX.length));
+      this.handleWidgetEvent(
+        data.slice(GameballWidget.WIDGET_EVENT_PREFIX.length)
+      );
       return;
     }
     if (data === GameballWidget.CLOSE_WIDGET_MESSAGE) {
@@ -249,7 +251,8 @@ class GameballWidget extends React.Component<Props, State> {
   // :port (e.g. "https://m.gameball.app:443/x" and "m.gameball.app/x" both → "m.gameball.app"),
   // matching the native URL.host behaviour used by the other SDKs. Returns '' if none.
   private static hostOf(url: string): string {
-    const authority = url.replace(/^[a-zA-Z]+:\/\//, '').split(/[/?#]/)[0] ?? '';
+    const authority =
+      url.replace(/^[a-zA-Z]+:\/\//, '').split(/[/?#]/)[0] ?? '';
     const host = authority.split('@').pop() ?? ''; // drop user:pass@
     return (host.split(':')[0] ?? '').toLowerCase(); // drop :port
   }
@@ -397,7 +400,9 @@ class GameballWidget extends React.Component<Props, State> {
 
     const enc = encodeURIComponent;
     const params =
-      `customerId=${enc(customerId ?? '')}&apiKey=${enc(apiKey)}&lang=${enc(lang)}` +
+      `customerId=${enc(customerId ?? '')}&apiKey=${enc(apiKey)}&lang=${enc(
+        lang
+      )}` +
       `${shop ? `&shop=${enc(shop)}` : ''}` +
       `${platform ? `&platform=${enc(platform)}` : ''}` +
       `${sessionToken ? `&sessionToken=${enc(sessionToken)}` : ''}` +
@@ -440,12 +445,17 @@ class GameballWidget extends React.Component<Props, State> {
                 onPress={() => this.hideProfile()}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={
-                  isRtl ? styles.closeButtonStyleRtl : styles.closeButtonStyleLtr
+                  isRtl
+                    ? styles.closeButtonStyleRtl
+                    : styles.closeButtonStyleLtr
                 }
               >
                 <Image
                   source={require('../Assets/close.png')}
-                  style={[styles.closeIconStyle, { tintColor: `${closeButtonColor}` }]}
+                  style={[
+                    styles.closeIconStyle,
+                    { tintColor: `${closeButtonColor}` },
+                  ]}
                 />
               </TouchableOpacity>
             )}

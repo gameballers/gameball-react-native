@@ -5,7 +5,7 @@
 
 export enum PushProvider {
   firebase = 'Firebase',
-  huawei = 'Huawei'
+  huawei = 'Huawei',
 }
 
 export interface GameballConfig {
@@ -89,7 +89,10 @@ export interface WidgetEvent {
   [key: string]: any;
 }
 
-export type WidgetEventCallback = (event: WidgetEvent | null, error?: Error) => void;
+export type WidgetEventCallback = (
+  event: WidgetEvent | null,
+  error?: Error
+) => void;
 
 export type GameballSDKHeadersType = {
   'OS': string;

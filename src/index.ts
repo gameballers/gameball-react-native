@@ -18,6 +18,4 @@ export type {
 } from './types/Common';
 
 // Enums
-export {
-  PushProvider,
-} from './types/Common';
+export { PushProvider } from './types/Common';
