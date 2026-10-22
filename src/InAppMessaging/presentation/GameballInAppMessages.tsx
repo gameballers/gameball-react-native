@@ -102,6 +102,7 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
           onRequestClose={dismiss}
         >
           <WidgetView
+            key={current.key}
             message={message}
             url={url}
             onShown={current.onShown}

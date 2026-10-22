@@ -6,6 +6,7 @@ import { ReactMessagePresenter } from '../../presentation/message-presenter';
 import { ARTWORK_PAINT_TIMEOUT_MS } from '../../presentation/views/reveal';
 import type { InAppMessage } from '../../models/message';
 import { message } from '../helpers/fixtures';
+import GameballWidget from '../../../GameballWidget';
 
 function messageOf(overrides: Partial<InAppMessage> = {}): InAppMessage {
   return {
@@ -412,3 +413,84 @@ function stage(tree: TestRenderer.ReactTestRenderer): typeof HIDDEN {
       node.props.importantForAccessibility === 'no-hide-descendants',
   };
 }
+
+describe('games', () => {
+  /** A reward campaign: no artwork, its content a live widget. */
+  function game(id: string): InAppMessage {
+    return message({
+      id,
+      type: 'modal',
+      header: null,
+      body: null,
+      widget: {
+        gameCampaignId: 7,
+        gameCampaignType: 'wheel',
+        delayMs: null,
+        dismissLimit: null,
+      },
+    });
+  }
+
+  /** What the injected readiness script posts from inside the widget. */
+  function post(tree: TestRenderer.ReactTestRenderer, data: string): void {
+    tree.root
+      .find(
+        (n) => typeof n.type === 'string' && n.props.testID === 'gb-webview'
+      )
+      .props.onMessage({ nativeEvent: { data } });
+  }
+
+  /** True while some view above the widget is transparent. */
+  function hidden(tree: TestRenderer.ReactTestRenderer): boolean {
+    let n: TestRenderer.ReactTestInstance | null = tree.root.find(
+      (x) => typeof x.type === 'string' && x.props.testID === 'gb-webview'
+    );
+    for (; n; n = n.parent) {
+      const style = (StyleSheet.flatten(n.props.style) ?? {}) as {
+        opacity?: number;
+      };
+      if (typeof n.type === 'string' && style.opacity === 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  const apiKey = GameballWidget.apiKey;
+  beforeEach(() => {
+    // A game's url carries the api key, as it does in an app; without one it is never opened.
+    GameballWidget.apiKey = 'test-key';
+  });
+  afterEach(() => {
+    GameballWidget.apiKey = apiKey;
+  });
+
+  it('draws a game presented the moment the last one closed in a view of its own', () => {
+    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const next = recorder();
+    const first = {
+      ...recorder(),
+      // The service presents the game parked behind this one as it leaves, in the same update.
+      onDismissed: () => {
+        presenter.present(game('next'), next);
+      },
+    };
+
+    act(() => {
+      presenter.present(game('first'), first);
+    });
+    act(() => post(tree, 'gb:ready'));
+    expect(first.log).toEqual(['shown']);
+    act(() => post(tree, 'gb:close'));
+
+    // The next game has not drawn yet: nothing of it on screen, nothing counted.
+    expect(hidden(tree)).toBe(true);
+    expect(next.log).toEqual([]);
+    act(() => post(tree, 'gb:ready'));
+    expect(hidden(tree)).toBe(false);
+    expect(next.log).toEqual(['shown']);
+    unmount(tree);
+  });
+});
