@@ -23,6 +23,7 @@ interface Props {
   openDetail?: string;
   hideNavigation?: boolean;
   showCloseButton?: boolean;
+  externalLinkCallback?: (url: string) => void;
 }
 
 interface State {
@@ -69,6 +70,13 @@ class GameballWidget extends React.Component<Props, State> {
   static mobile?: string = '';
   static email?: string = '';
   static externalLinkCallback?: (url: string) => void;
+
+  // Host that identifies Gameball widget content. Any subdomain of this (m., www.,
+  // app., alpha., …) loads in-webview; everything else is treated as a cross-host link.
+  private static readonly GAMEBALL_HOST = 'gameball.app';
+  private static readonly GAMEBALL_HOST_SUFFIX = '.gameball.app';
+  // Query marker the widget appends to a link it wants opened in the device browser.
+  private static readonly EXTERNAL_BROWSER_FLAG = 'gbExternalBrowser=true';
 
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
@@ -136,6 +144,13 @@ class GameballWidget extends React.Component<Props, State> {
 
   componentDidMount() {
     this._isMounted = true;
+    // When the widget is used as a component (e.g. <GameballWidget externalLinkCallback={…}/>
+    // + widgetRef.showProfile()), surface the prop to the static the nav handler reads.
+    // Left untouched when the prop is absent so a callback set via GameballApp.init/showProfile
+    // is not clobbered.
+    if (this.props.externalLinkCallback) {
+      GameballWidget.externalLinkCallback = this.props.externalLinkCallback;
+    }
   }
 
   componentWillUnmount() {
@@ -168,19 +183,46 @@ class GameballWidget extends React.Component<Props, State> {
     }
   }
 
-  // Navigation handling — consumes every intercepted link (nothing loads in-widget):
+  // Extracts the lowercased host from a URL or bare authority, dropping any userinfo and
+  // :port (e.g. "https://m.gameball.app:443/x" and "m.gameball.app/x" both → "m.gameball.app"),
+  // matching the native URL.host behaviour used by the other SDKs. Returns '' if none.
+  private static hostOf(url: string): string {
+    const authority = url.replace(/^[a-zA-Z]+:\/\//, '').split(/[/?#]/)[0] ?? '';
+    const host = authority.split('@').pop() ?? ''; // drop user:pass@
+    return (host.split(':')[0] ?? '').toLowerCase(); // drop :port
+  }
+
+  // True when the URL should load inside the webview rather than be treated as an
+  // external link. Non-http(s) schemes (about:blank/srcdoc, data:, blob:, file:) are the
+  // webview's own internal frames — always in-webview, never delegated. Otherwise it is a
+  // Gameball link when the host is "gameball.app" or ends with ".gameball.app" (so
+  // m./www./app./alpha. etc. match; the leading-dot suffix rejects "evilgameball.app").
+  isGameballHost(url: string): boolean {
+    if (!/^https?:\/\//i.test(url)) {
+      return true; // about:/data:/blob:/file: etc. → internal, stay in-webview
+    }
+    const host = GameballWidget.hostOf(url);
+    if (!host) {
+      return true;
+    }
+    return (
+      host === GameballWidget.GAMEBALL_HOST ||
+      host.endsWith(GameballWidget.GAMEBALL_HOST_SUFFIX)
+    );
+  }
+
+  // Handle a cross-host link (never loads in-widget):
   //   1) gbExternalBrowser=true → device browser (flag outranks the callback)
   //   2) else if externalLinkCallback set → delegate to it
-  //   3) else → device browser
-  handleExternalBrowserLink(url: string): boolean {
-    if (url.includes('gbExternalBrowser=true')) {
+  //   3) else → device browser (safety net)
+  handleExternalBrowserLink(url: string): void {
+    if (url.includes(GameballWidget.EXTERNAL_BROWSER_FLAG)) {
       Linking.openURL(url).catch(() => {});
     } else if (GameballWidget.externalLinkCallback) {
       GameballWidget.externalLinkCallback(url);
     } else {
       Linking.openURL(url).catch(() => {});
     }
-    return true;
   }
 
   renderWidgetComponent({
@@ -191,6 +233,12 @@ class GameballWidget extends React.Component<Props, State> {
     scrollEnabled: boolean;
   }) {
     const originWhitelist: string[] = [
+      // '*' lets every origin reach onShouldStartLoadWithRequest, making that handler the
+      // single navigation decision point. A restrictive originWhitelist would otherwise
+      // open any non-matching origin in the device browser BEFORE the handler runs —
+      // bypassing the externalLinkCallback delegation and the in-webview load of
+      // *.gameball.app. The original entries below are kept as documented trusted origins.
+      '*',
       ...WEBVIEW_CONFIG.ALLOWED_ORIGINS,
       ...(GameballWidget.openDetail ? [GameballWidget.openDetail] : []),
     ];
@@ -203,7 +251,16 @@ class GameballWidget extends React.Component<Props, State> {
         originWhitelist={originWhitelist}
         showsVerticalScrollIndicator={false}
         onMessage={this.onMessage}
-        onShouldStartLoadWithRequest={(request) => !this.handleExternalBrowserLink(request.url)}
+        // Route target="_blank" / window.open links back through onShouldStartLoadWithRequest
+        // instead of letting the OS open a new window externally (iOS default is true).
+        setSupportMultipleWindows={false}
+        onShouldStartLoadWithRequest={(request) => {
+          if (this.isGameballHost(request.url)) {
+            return true; // load in-webview
+          }
+          this.handleExternalBrowserLink(request.url);
+          return false; // cross-host link consumed externally
+        }}
         androidHardwareAccelerationDisabled={false}
         injectedJavaScriptBeforeContentLoaded="
         if (navigator.share == null) {
