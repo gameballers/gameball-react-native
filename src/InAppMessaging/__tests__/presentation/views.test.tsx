@@ -287,3 +287,65 @@ describe('the surface', () => {
     unmount(tree);
   });
 });
+
+describe("the copy's inset", () => {
+  function modal(message: InAppMessage) {
+    return mount(
+      <ModalView
+        message={message}
+        artwork={artworkOf(message)}
+        onShown={noop}
+        onFailed={noop}
+        onPress={noop}
+        onDismiss={noop}
+        onScrim={noop}
+      />
+    );
+  }
+
+  /** The padding around the copy, side by side. */
+  function insetOf(tree: TestRenderer.ReactTestRenderer) {
+    const copy = tree.root.findByType(ScrollView);
+    const style = (StyleSheet.flatten(copy.props.contentContainerStyle) ??
+      {}) as {
+      paddingTop?: number;
+      paddingBottom?: number;
+      paddingHorizontal?: number;
+    };
+    return {
+      top: style.paddingTop ?? 0,
+      bottom: style.paddingBottom ?? 0,
+      sides: style.paddingHorizontal ?? 0,
+    };
+  }
+
+  const views = [
+    ['modal', modal],
+    ['fullscreen', fullscreen],
+  ] as const;
+
+  it.each(views)(
+    'is the same on every side of a %s with no buttons beneath it',
+    (_, draw) => {
+      // The buttons row carried the only inset under the copy, so a message without buttons ran
+      // its last line into the card's bottom edge.
+      const tree = draw(messageOf({ buttons: [] }));
+      const inset = insetOf(tree);
+      expect(inset.top).toBeGreaterThan(0);
+      expect(inset.bottom).toBe(inset.top);
+      expect(inset.sides).toBe(inset.top);
+      unmount(tree);
+    }
+  );
+
+  it.each(views)(
+    'stays open underneath on a %s with buttons, which carry their own inset',
+    (_, draw) => {
+      // The buttons row already sets the gap above itself; an inset under the copy as well would
+      // double it.
+      const tree = draw(messageOf({ buttons: [button('b0')] }));
+      expect(insetOf(tree).bottom).toBe(0);
+      unmount(tree);
+    }
+  );
+});
