@@ -268,6 +268,11 @@ The campaign *is* the content. There is no headline or button to style — the S
 itself in a card over your app, and shows the card only once the game has finished drawing, so your
 customer never sees a loading state.
 
+While a game loads, your app stays fully usable: it loads out of sight in
+`<GameballInAppMessages />`'s own layer, not a native modal, and takes the screen only once it has
+drawn. That layer lives in your view tree, so mount it after your navigator as shown above — and a
+modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up.
+
 A game campaign can be authored as a modal or fullscreen. Fullscreen insets its content into the
 safe area, so the campaign's own controls stay clear of the notch and the home indicator.
 

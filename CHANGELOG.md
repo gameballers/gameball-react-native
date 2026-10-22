@@ -22,6 +22,9 @@ All notable changes to Gameball React Native SDK are documented here.
 ### ⚠️ Not yet supported
 - 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger
 
+### 📝 Notes
+- 🧭 **A game loads out of sight, in `<GameballInAppMessages />`'s own layer, not a native modal.** Your app keeps its taps and its back button while the game draws, and the game takes the screen only once it has drawn. A modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up
+
 ---
 
 ## [4.0.0] - 2026-10-23 🎉

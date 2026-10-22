@@ -4,6 +4,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { iamLog } from '../../log';
 import type { InAppMessage } from '../../models/message';
+import { Stage } from './reveal';
 import { READINESS_SCRIPT } from './widget-readiness';
 
 /**
@@ -111,36 +112,36 @@ export function WidgetView({
   const fullscreen = message.type === 'fullscreen';
 
   return (
-    <View
-      style={[
-        StyleSheet.absoluteFill,
-        fullscreen
-          ? {
-              backgroundColor: message.style.backgroundColor ?? '#FFFFFF',
-              paddingTop: topInset,
-              paddingBottom: bottomInset,
-            }
-          : styles.scrim,
-        // Transparent until drawn, rather than unmounted: the WebView has to be laid out at its
-        // real size while it loads, or the page computes its layout against nothing.
-        { opacity: ready ? 1 : 0 },
-      ]}
-      // Nothing reaches the customer until it is worth touching; without this the scrim would
-      // swallow taps for seconds with nothing on screen to explain why.
-      pointerEvents={ready ? 'auto' : 'none'}
-    >
-      <View style={fullscreen ? styles.fullBleed : styles.card}>
-        <WebView
-          source={{ uri: url }}
-          onMessage={onMessage}
-          injectedJavaScript={READINESS_SCRIPT}
-          scrollEnabled={false}
-          androidHardwareAccelerationDisabled={false}
-          style={styles.web}
-          onError={() => settle(false)}
-        />
+    // Held out of sight, untouchable and unheard until drawn, rather than unmounted: the WebView
+    // has to be laid out at its real size while it loads, or the page computes its layout against
+    // nothing. The scrim waits with it — a game loads in the SDK's own layer, not a Modal, so for
+    // the seconds that takes the app keeps its taps, with nothing on screen to explain otherwise.
+    <Stage revealed={ready}>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          fullscreen
+            ? {
+                backgroundColor: message.style.backgroundColor ?? '#FFFFFF',
+                paddingTop: topInset,
+                paddingBottom: bottomInset,
+              }
+            : styles.scrim,
+        ]}
+      >
+        <View style={fullscreen ? styles.fullBleed : styles.card}>
+          <WebView
+            source={{ uri: url }}
+            onMessage={onMessage}
+            injectedJavaScript={READINESS_SCRIPT}
+            scrollEnabled={false}
+            androidHardwareAccelerationDisabled={false}
+            style={styles.web}
+            onError={() => settle(false)}
+          />
+        </View>
       </View>
-    </View>
+    </Stage>
   );
 }
 

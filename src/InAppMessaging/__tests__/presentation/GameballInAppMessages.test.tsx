@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Modal, StyleSheet } from 'react-native';
+import { BackHandler, Image, Modal, Platform, StyleSheet } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { createGameballInAppMessages } from '../../presentation/GameballInAppMessages';
 import { ReactMessagePresenter } from '../../presentation/message-presenter';
@@ -463,6 +463,91 @@ describe('games', () => {
   });
   afterEach(() => {
     GameballWidget.apiKey = apiKey;
+  });
+
+  /** The layer a game draws in: the SDK's own, over the app, rather than a Modal. */
+  function layer(tree: TestRenderer.ReactTestRenderer) {
+    return tree.root.find(
+      (n) => typeof n.type === 'string' && n.props.testID === 'gb-iam-game'
+    );
+  }
+
+  it('loads a game without taking the screen, and takes it only once the game has drawn', () => {
+    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    // A Modal holds every touch on the screen from the moment it mounts, whatever is drawn in
+    // it, and a game takes seconds to draw: loading in one froze the app with nothing on screen.
+    expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+    expect(stage(tree)).toEqual(HIDDEN);
+    expect(layer(tree).props.accessibilityViewIsModal).toBe(false);
+
+    act(() => post(tree, 'gb:ready'));
+    expect(calls.log).toEqual(['shown']);
+    expect(stage(tree)).toEqual(REVEALED);
+    // Drawn over the app now: VoiceOver keeps to the game, as it would inside a Modal.
+    expect(layer(tree).props.accessibilityViewIsModal).toBe(true);
+    unmount(tree);
+  });
+
+  it('leaves the Android back button to the app while a game loads, and closes the game with it once it is up', () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    type BackPress = Parameters<typeof BackHandler.addEventListener>[1];
+    const handlers: BackPress[] = [];
+    jest
+      .spyOn(BackHandler, 'addEventListener')
+      .mockImplementation((_event, handler) => {
+        handlers.push(handler);
+        return {
+          remove: () => {
+            handlers.splice(handlers.indexOf(handler), 1);
+          },
+        };
+      });
+    // What Android does with a press: offers it to the handlers, newest first; true keeps it.
+    const pressBack = () =>
+      handlers
+        .slice()
+        .reverse()
+        .some(
+          (handler) =>
+            handler({ type: 'hardwareBackPress', timeStamp: Date.now() }) ===
+            true
+        );
+
+    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    let kept = true;
+    act(() => {
+      kept = pressBack();
+    });
+    // Nothing is on screen yet, so the press is the app's: it navigates, the game keeps loading.
+    expect(kept).toBe(false);
+    expect(presenter.isShowing).toBe(true);
+
+    act(() => post(tree, 'gb:ready'));
+    act(() => {
+      kept = pressBack();
+    });
+    expect(kept).toBe(true);
+    expect(calls.log).toEqual(['shown', 'dismissed']);
+    unmount(tree);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it('draws a game presented the moment the last one closed in a view of its own', () => {

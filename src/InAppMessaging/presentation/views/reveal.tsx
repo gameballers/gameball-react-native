@@ -99,8 +99,8 @@ export function useReveal(
  * Content only, never the backdrop. A React Native Modal holds every touch on the screen from the
  * moment it mounts, whatever is drawn in it — a view controller of its own on iOS, a window of its
  * own on Android — so a modal or a full screen keeps its scrim outside the stage, on screen from
- * the first frame. A slide-up has no Modal and no scrim: while it waits, the app beneath stays
- * usable.
+ * the first frame. A slide-up has no Modal and no scrim, and a game loads in the SDK's own layer
+ * rather than a Modal, scrim and all: while either waits, the app beneath stays usable.
  */
 export function Stage({
   revealed,
