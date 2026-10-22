@@ -97,4 +97,5 @@ export type GameballSDKHeadersType = {
   'X-GB-Agent': string;
   'APIKey'?: string;
   'Content-Type': string;
+  'lang'?: string;
 };
