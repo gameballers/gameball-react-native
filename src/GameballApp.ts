@@ -117,6 +117,7 @@ export class GameballApp {
     callback?: Callback<InitializeCustomerResponse>,
     sessionToken?: string | null
   ): Promise<InitializeCustomerResponse> {
+    let result: InitializeCustomerResponse;
     try {
       this.ensureInitialized();
 
@@ -143,14 +144,9 @@ export class GameballApp {
       const response = await responsePromise;
 
       // Extract gameballId from response
-      const result: InitializeCustomerResponse = {
+      result = {
         gameballId: response.gameballId || response.id || '',
       };
-
-      // Call callback if provided (backward compatibility)
-      callback?.onSuccess?.(result);
-
-      return result;
     } catch (error) {
       callback?.onError?.(
         error instanceof Error
@@ -159,6 +155,10 @@ export class GameballApp {
       );
       throw error;
     }
+
+    // Outside the try so an exception thrown by onSuccess isn't also reported to onError
+    callback?.onSuccess?.(result);
+    return result;
   }
 
   /**
@@ -186,9 +186,6 @@ export class GameballApp {
       // Fire telemetry immediately after dispatching the request.
       GameballLogger.log('sdk.sendEvent', event);
       await eventPromise;
-
-      callback?.onSuccess?.(true);
-      return true;
     } catch (error) {
       callback?.onError?.(
         error instanceof Error
@@ -197,6 +194,10 @@ export class GameballApp {
       );
       throw error;
     }
+
+    // Outside the try so an exception thrown by onSuccess isn't also reported to onError
+    callback?.onSuccess?.(true);
+    return true;
   }
 
   /**
@@ -412,7 +413,13 @@ export class GameballApp {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    return response.json();
+    // A 2xx is a success even when the body is empty or not JSON (e.g. an accepted event)
+    const body = await response.text();
+    try {
+      return body ? JSON.parse(body) : {};
+    } catch {
+      return {};
+    }
   }
 
   private async fetchBotSettings(): Promise<void> {
