@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import GameballWidget from './GameballWidget';
 import GameballLogger from './GameballLogger';
+import { LanguageUtils } from './GameballWidget/languageUtils';
 import type {
   GameballConfig,
   InitializeCustomerRequest,
@@ -13,6 +15,8 @@ import type {
 import { API_ENDPOINTS, ERROR_MESSAGES } from './constants';
 
 const package_json = require('../package.json');
+
+const CUSTOMER_ID_KEY = 'gameball_customer_id';
 
 /**
  * Primary Gameball SDK entry point providing comprehensive functionality
@@ -32,6 +36,8 @@ export class GameballApp {
   private isInitialized: boolean = false;
   private mainColor: string | null = null;
   private sessionToken: string | null = null;
+  private lang: string = 'en';
+  private customerPreferredLanguage: string | null = null;
 
   // React Native specific properties
   private readonly sdkVersion = package_json.version;
@@ -61,6 +67,7 @@ export class GameballApp {
       this.config = config;
       this.apiKey = config.apiKey;
       this.sessionToken = config.sessionToken || null;
+      this.lang = LanguageUtils.normalize(config.lang || 'en');
 
       // Fetch bot settings
       await this.fetchBotSettings();
@@ -118,6 +125,14 @@ export class GameballApp {
 
       // Validate the request - any validation errors will be caught and trigger callback
       this.validateCustomerRequest(request);
+
+      AsyncStorage.setItem(CUSTOMER_ID_KEY, request.customerId).catch(() => {});
+
+      // Store customer preferred language for widget display
+      const preferredLanguage = request.customerAttributes?.preferredLanguage;
+      if (preferredLanguage && preferredLanguage.trim() !== '') {
+        this.customerPreferredLanguage = LanguageUtils.normalize(preferredLanguage);
+      }
 
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
@@ -200,7 +215,7 @@ export class GameballApp {
     // Initialize the widget with the SDK configuration
     await GameballWidget.init({
       apiKey: this.apiKey,
-      lang: this.config?.lang || 'en',
+      lang: LanguageUtils.resolve(this.lang, this.customerPreferredLanguage, request.lang),
       shop: this.config?.shop,
       platform: this.config?.platform,
       sessionToken: this.sessionToken || undefined,
@@ -236,21 +251,43 @@ export class GameballApp {
   }
 
   /**
+   * Change the SDK's global language without re-calling init(). Affects every showProfile()
+   * that doesn't pass its own `lang`. Also becomes the customer's preferred language and is
+   * synced to the last initialized customer's profile.
+   * @param lang - A supported language code (e.g. 'en', 'ar'). Any other code falls back to 'en'.
+   */
+  setLanguage(lang: string): void {
+    const language = LanguageUtils.normalize(lang);
+    this.lang = language;
+    // Customer language is read before the global one, so set it too
+    this.customerPreferredLanguage = language;
+    if (this.config) {
+      this.config.lang = language;
+    }
+
+    AsyncStorage.getItem(CUSTOMER_ID_KEY)
+      .then((customerId) => {
+        if (!this.isInitialized || !customerId) return;
+        // Pass the current session token: initializeCustomer replaces the stored one
+        return this.initializeCustomer(
+          { customerId, customerAttributes: { preferredLanguage: language } },
+          undefined,
+          this.sessionToken
+        );
+      })
+      .catch(() => {});
+  }
+
+  /**
    * Change the preferred language
+   * @deprecated Use setLanguage() instead.
    * @param language - Two-letter language code (e.g., 'en', 'ar')
    */
   changeLanguage(language: string): void {
     if (language.length !== 2) {
       throw new Error(ERROR_MESSAGES.INVALID_LANGUAGE);
     }
-
-    if (this.config) {
-      this.config.lang = language;
-    }
-
-    if (__DEV__) {
-      console.log(`[GameballApp] Language changed to: ${language}`);
-    }
+    this.setLanguage(language);
   }
 
   /**

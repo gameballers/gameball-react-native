@@ -68,6 +68,11 @@ export interface ShowProfileRequest {
   closeButtonColor?: string;
   mobile?: string;
   email?: string;
+  /**
+   * Optional language code (e.g. 'en', 'ar') for this widget presentation only. When not
+   * provided, falls back to the customer preferred language, then the global language, then 'en'.
+   */
+  lang?: string;
   externalLinkCallback?: (url: string) => void;
   /**
    * Optional handler that receives widget events (e.g. game completion) posted from the widget
