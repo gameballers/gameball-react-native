@@ -395,18 +395,19 @@ class GameballWidget extends React.Component<Props, State> {
 
     const mainColor = GameballWidget.mainColor;
 
+    const enc = encodeURIComponent;
     const params =
-      `customerId=${customerId ?? ''}&apiKey=${apiKey}&lang=${lang}` +
-      `${shop ? `&shop=${shop}` : ''}` +
-      `${platform ? `&platform=${platform}` : ''}` +
-      `${sessionToken ? `&sessionToken=${sessionToken}` : ''}` +
+      `customerId=${enc(customerId ?? '')}&apiKey=${enc(apiKey)}&lang=${enc(lang)}` +
+      `${shop ? `&shop=${enc(shop)}` : ''}` +
+      `${platform ? `&platform=${enc(platform)}` : ''}` +
+      `${sessionToken ? `&sessionToken=${enc(sessionToken)}` : ''}` +
       `&os=${Platform.OS}` +
       `&sdk=React/${package_json.version}` +
-      `${mainColor ? `&main=${mainColor}` : ''}` +
-      `${openDetail ? `&openDetail=${openDetail}` : ''}` +
+      `${mainColor ? `&main=${enc(mainColor)}` : ''}` +
+      `${openDetail ? `&openDetail=${enc(openDetail)}` : ''}` +
       `${hideNavigation ? `&hideNavigation=${hideNavigation}` : ''}` +
-      `${mobile ? `&mobile=${encodeURIComponent(mobile)}` : ''}` +
-      `${email ? `&email=${encodeURIComponent(email)}` : ''}`;
+      `${mobile ? `&mobile=${enc(mobile)}` : ''}` +
+      `${email ? `&email=${enc(email)}` : ''}`;
 
     const isRtl = LanguageUtils.isRtl(lang);
     const closeButtonColor = GameballWidget.closeButtonColor || '#CECECE';
