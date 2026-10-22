@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   I18nManager,
@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import type { InAppMessage, MessageButton } from '../../models/message';
 import { MessageMetrics, SlideupMetrics } from '../metrics';
+import type { MessageArtwork } from '../presenter';
+import { Stage, useReveal } from './reveal';
 
 /**
  * A banner at one edge that does not block the app.
@@ -22,23 +24,44 @@ import { MessageMetrics, SlideupMetrics } from '../metrics';
  */
 export function SlideupView({
   message,
+  artwork,
   onShown,
+  onFailed,
   onPress,
   onDismiss,
   topInset,
   bottomInset,
 }: {
   message: InAppMessage;
+  artwork: MessageArtwork;
   onShown: () => void;
+  /** The icon never painted; take the message away having never shown it. */
+  onFailed: () => void;
   onPress: (button: MessageButton | null) => void;
   onDismiss: () => void;
   topInset: number;
   bottomInset: number;
 }) {
+  const icon = artwork.icon;
   const fromTop = message.slidePosition === 'top';
   const travel = useRef(new Animated.Value(fromTop ? -120 : 120)).current;
   const drag = useRef(new Animated.Value(0)).current;
   const tappable = message.clickAction !== null;
+  const { revealed, onLayout, onImageLoad, onImageError } = useReveal(
+    icon !== null,
+    onShown,
+    onFailed
+  );
+  useEffect(() => {
+    if (!revealed) {
+      return;
+    }
+    Animated.spring(travel, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+    }).start();
+  }, [revealed, travel]);
 
   const springBack = useCallback(() => {
     Animated.spring(drag, {
@@ -76,84 +99,83 @@ export function SlideupView({
   );
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={[
-        styles.wrap,
-        fromTop
-          ? { top: 0, paddingTop: Math.max(SlideupMetrics.margin, topInset) }
-          : {
-              bottom: 0,
-              paddingBottom: Math.max(SlideupMetrics.margin, bottomInset),
-            },
-      ]}
-    >
-      <Animated.View
-        testID="gb-iam-slideup"
-        accessibilityRole="alert"
-        accessible
-        onLayout={() => {
-          onShown();
-          Animated.spring(travel, {
-            toValue: 0,
-            useNativeDriver: true,
-            bounciness: 0,
-          }).start();
-        }}
+    <Stage revealed={revealed}>
+      <View
+        pointerEvents="box-none"
         style={[
-          styles.band,
-          {
-            backgroundColor:
-              message.style.backgroundColor ?? MessageMetrics.defaultSurface,
-            transform: [{ translateY: Animated.add(travel, drag) }],
-          },
-        ]}
-        {...responder.panHandlers}
-      >
-        <Pressable
-          disabled={!tappable}
-          onPress={() => onPress(null)}
-          style={styles.row}
-          testID="gb-iam-surface"
-        >
-          {message.iconUrl ? (
-            <Image
-              source={{ uri: message.iconUrl }}
-              style={styles.icon}
-              resizeMode="cover"
-            />
-          ) : null}
-          <Text
-            testID="gb-iam-body"
-            numberOfLines={SlideupMetrics.maxTextLines}
-            style={[
-              styles.text,
-              {
-                color:
-                  message.style.bodyColor ?? MessageMetrics.defaultBodyColor,
-                writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr',
+          styles.wrap,
+          fromTop
+            ? { top: 0, paddingTop: Math.max(SlideupMetrics.margin, topInset) }
+            : {
+                bottom: 0,
+                paddingBottom: Math.max(SlideupMetrics.margin, bottomInset),
               },
-            ]}
+        ]}
+      >
+        <Animated.View
+          testID="gb-iam-slideup"
+          accessibilityRole="alert"
+          accessible
+          onLayout={onLayout}
+          style={[
+            styles.band,
+            {
+              backgroundColor:
+                message.style.backgroundColor ?? MessageMetrics.defaultSurface,
+              transform: [{ translateY: Animated.add(travel, drag) }],
+            },
+          ]}
+          {...responder.panHandlers}
+        >
+          <Pressable
+            disabled={!tappable}
+            onPress={() => onPress(null)}
+            style={styles.row}
+            testID="gb-iam-surface"
           >
-            {[message.header, message.body].filter(Boolean).join(' ')}
-          </Text>
-          {tappable ? (
+            {icon ? (
+              <Image
+                testID="gb-iam-icon"
+                source={{ uri: icon.uri }}
+                style={styles.icon}
+                resizeMode="cover"
+                onLoad={onImageLoad}
+                onError={onImageError}
+              />
+            ) : null}
             <Text
+              testID="gb-iam-body"
+              numberOfLines={SlideupMetrics.maxTextLines}
               style={[
-                styles.chevron,
+                styles.text,
                 {
                   color:
                     message.style.bodyColor ?? MessageMetrics.defaultBodyColor,
-                  transform: [{ scaleX: I18nManager.isRTL ? -1 : 1 }],
+                  writingDirection: I18nManager.isRTL ? 'rtl' : 'ltr',
                 },
               ]}
             >
-              ›
+              {[message.header, message.body].filter(Boolean).join(' ')}
             </Text>
-          ) : null}
-        </Pressable>
-      </Animated.View>
-    </View>
+            {tappable ? (
+              <Text
+                style={[
+                  styles.chevron,
+                  {
+                    color:
+                      message.style.bodyColor ??
+                      MessageMetrics.defaultBodyColor,
+                    transform: [{ scaleX: I18nManager.isRTL ? -1 : 1 }],
+                  },
+                ]}
+              >
+                ›
+              </Text>
+            ) : null}
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Stage>
   );
 }
 
