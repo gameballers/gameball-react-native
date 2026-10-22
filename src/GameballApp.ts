@@ -214,6 +214,7 @@ export class GameballApp {
       mobile: request.mobile,
       email: request.email,
       externalLinkCallback: request.externalLinkCallback,
+      widgetEventCallback: request.widgetEventCallback,
     });
 
     // Create and show widget instance
@@ -221,7 +222,7 @@ export class GameballApp {
     widget.showProfile();
 
     // showProfile renders a webview (never hits the backend), so log it here.
-    // Full request as-is (externalLinkCallback is a function — JSON.stringify drops it).
+    // Full request as-is (the callbacks are functions — JSON.stringify drops them).
     GameballLogger.log('sdk.showProfile', request);
   }
 

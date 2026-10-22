@@ -69,7 +69,21 @@ export interface ShowProfileRequest {
   mobile?: string;
   email?: string;
   externalLinkCallback?: (url: string) => void;
+  /**
+   * Optional handler that receives widget events (e.g. game completion) posted from the widget
+   * via window.WidgetEvent.postEvent as a {type, metadata} object; receives (null, error) when
+   * the event payload can't be parsed.
+   */
+  widgetEventCallback?: WidgetEventCallback;
 }
+
+export interface WidgetEvent {
+  type?: string;
+  metadata?: Record<string, any>;
+  [key: string]: any;
+}
+
+export type WidgetEventCallback = (event: WidgetEvent | null, error?: Error) => void;
 
 export type GameballSDKHeadersType = {
   'OS': string;

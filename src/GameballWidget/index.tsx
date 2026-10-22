@@ -14,6 +14,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import styles from './styles';
 import { LanguageUtils } from './languageUtils';
 import { API_ENDPOINTS, WEBVIEW_CONFIG } from '../constants';
+import type { WidgetEventCallback } from '../types/Common';
 const package_json = require('../../package.json');
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -24,6 +25,7 @@ interface Props {
   hideNavigation?: boolean;
   showCloseButton?: boolean;
   externalLinkCallback?: (url: string) => void;
+  widgetEventCallback?: WidgetEventCallback;
 }
 
 interface State {
@@ -50,6 +52,7 @@ type initFunctionParams = {
   mobile?: string;
   email?: string;
   externalLinkCallback?: (url: string) => void;
+  widgetEventCallback?: WidgetEventCallback;
 };
 class GameballWidget extends React.Component<Props, State> {
   static apiPrefix: string = '';
@@ -70,6 +73,7 @@ class GameballWidget extends React.Component<Props, State> {
   static mobile?: string = '';
   static email?: string = '';
   static externalLinkCallback?: (url: string) => void;
+  static widgetEventCallback?: WidgetEventCallback;
 
   // Host that identifies Gameball widget content. Any subdomain of this (m., www.,
   // app., alpha., …) loads in-webview; everything else is treated as a cross-host link.
@@ -77,6 +81,8 @@ class GameballWidget extends React.Component<Props, State> {
   private static readonly GAMEBALL_HOST_SUFFIX = '.gameball.app';
   // Query marker the widget appends to a link it wants opened in the device browser.
   private static readonly EXTERNAL_BROWSER_FLAG = 'gbExternalBrowser=true';
+  // Prefix of the postMessage the injected bridge sends for window.WidgetEvent.postEvent.
+  private static readonly WIDGET_EVENT_PREFIX = 'widgetEvent:';
 
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
@@ -109,7 +115,8 @@ class GameballWidget extends React.Component<Props, State> {
     closeButtonColor,
     mobile,
     email,
-    externalLinkCallback
+    externalLinkCallback,
+    widgetEventCallback,
   }: initFunctionParams) {
     Object.assign(GameballWidget, {
       apiKey,
@@ -126,6 +133,7 @@ class GameballWidget extends React.Component<Props, State> {
       mobile,
       email,
       externalLinkCallback,
+      widgetEventCallback,
     });
 
     if (sessionToken) {
@@ -151,15 +159,22 @@ class GameballWidget extends React.Component<Props, State> {
     if (this.props.externalLinkCallback) {
       GameballWidget.externalLinkCallback = this.props.externalLinkCallback;
     }
+    if (this.props.widgetEventCallback) {
+      GameballWidget.widgetEventCallback = this.props.widgetEventCallback;
+    }
   }
 
   componentWillUnmount() {
     this._isMounted = false;
   }
 
-  async onMessage(e: WebViewMessageEvent) {
-    if (Platform.OS === 'ios') return;
+  onMessage = async (e: WebViewMessageEvent) => {
     const { data } = e.nativeEvent;
+    if (data.startsWith(GameballWidget.WIDGET_EVENT_PREFIX)) {
+      this.handleWidgetEvent(data.slice(GameballWidget.WIDGET_EVENT_PREFIX.length));
+      return;
+    }
+    if (Platform.OS === 'ios') return;
     if (data.startsWith('share:')) {
       try {
         const param = JSON.parse(data.slice('share:'.length));
@@ -180,6 +195,24 @@ class GameballWidget extends React.Component<Props, State> {
       } catch (e: unknown) {
         console.error(e);
       }
+    }
+  };
+
+  // Widget → host events (e.g. game completion), posted via window.WidgetEvent.postEvent.
+  handleWidgetEvent(raw: string) {
+    const callback = GameballWidget.widgetEventCallback;
+    if (!callback) return;
+    let event: unknown;
+    try {
+      event = JSON.parse(raw);
+    } catch (error) {
+      callback(null, error instanceof Error ? error : new Error(String(error)));
+      return;
+    }
+    if (event !== null && typeof event === 'object' && !Array.isArray(event)) {
+      callback(event as Record<string, any>);
+    } else {
+      callback(null, new Error('Unexpected widget event payload'));
     }
   }
 
@@ -267,6 +300,13 @@ class GameballWidget extends React.Component<Props, State> {
           navigator.share = (param) => {
              window.ReactNativeWebView.postMessage('share:' + JSON.stringify(param));
           };
+        };
+        // Bridge widget → host events: the widget calls window.WidgetEvent.postEvent(rawJson).
+        window.WidgetEvent = window.WidgetEvent || {};
+        window.WidgetEvent.postEvent = function (raw) {
+          window.ReactNativeWebView.postMessage(
+            'widgetEvent:' + (typeof raw === 'string' ? raw : JSON.stringify(raw))
+          );
         };
         true;
         "
