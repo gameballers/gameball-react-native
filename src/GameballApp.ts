@@ -17,6 +17,7 @@ import { API_ENDPOINTS, ERROR_MESSAGES } from './constants';
 const package_json = require('../package.json');
 
 const CUSTOMER_ID_KEY = 'gameball_customer_id';
+const CUSTOMER_PREFERRED_LANGUAGE_KEY = 'gameball_customer_preferred_language';
 
 /**
  * Primary Gameball SDK entry point providing comprehensive functionality
@@ -68,6 +69,11 @@ export class GameballApp {
       this.apiKey = config.apiKey;
       this.sessionToken = config.sessionToken || null;
       this.lang = LanguageUtils.normalize(config.lang || 'en');
+
+      // Restore the customer preferred language saved before a relaunch
+      this.customerPreferredLanguage = await AsyncStorage.getItem(
+        CUSTOMER_PREFERRED_LANGUAGE_KEY
+      ).catch(() => null);
 
       // Fetch bot settings
       await this.fetchBotSettings();
@@ -124,7 +130,7 @@ export class GameballApp {
       // Store customer preferred language for widget display
       const preferredLanguage = request.customerAttributes?.preferredLanguage;
       if (preferredLanguage && preferredLanguage.trim() !== '') {
-        this.customerPreferredLanguage = LanguageUtils.normalize(preferredLanguage);
+        this.setCustomerPreferredLanguage(LanguageUtils.normalize(preferredLanguage));
       }
 
       // Process the request with internal fields (osType, channel)
@@ -294,7 +300,7 @@ export class GameballApp {
     const language = LanguageUtils.normalize(lang);
     this.lang = language;
     // Customer language is read before the global one, so set it too
-    this.customerPreferredLanguage = language;
+    this.setCustomerPreferredLanguage(language);
     if (this.config) {
       this.config.lang = language;
     }
@@ -341,6 +347,11 @@ export class GameballApp {
   }
 
   // Private helper methods
+  private setCustomerPreferredLanguage(language: string): void {
+    this.customerPreferredLanguage = language;
+    AsyncStorage.setItem(CUSTOMER_PREFERRED_LANGUAGE_KEY, language).catch(() => {});
+  }
+
   private ensureInitialized(): void {
     if (!this.isInitialized) {
       throw new Error(ERROR_MESSAGES.NOT_INITIALIZED);
@@ -425,6 +436,7 @@ export class GameballApp {
       'OS': this.os,
       'SDKVersion': this.sdkVersion,
       'X-GB-Agent': this.userAgent,
+      'lang': LanguageUtils.resolve(this.lang, this.customerPreferredLanguage),
     };
 
     if (this.sessionToken) {
