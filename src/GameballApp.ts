@@ -79,14 +79,6 @@ export class GameballApp {
         baseUrl: this.config?.apiPrefix || API_ENDPOINTS.BASE_URL,
         sdkVersion: this.sdkVersion,
       });
-      GameballLogger.log('sdk.init', {
-        apiKey: config.apiKey,
-        lang: config.lang,
-        platform: config.platform,
-        shop: config.shop,
-        apiPrefix: config.apiPrefix,
-        sessionToken: config.sessionToken,
-      });
 
       if (__DEV__) {
         console.log('[GameballApp] SDK initialized successfully', {
@@ -138,10 +130,7 @@ export class GameballApp {
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
 
-      const responsePromise = this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
-      // Fire telemetry immediately after dispatching the request.
-      GameballLogger.log('sdk.initializeCustomer', request);
-      const response = await responsePromise;
+      const response = await this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
 
       // Extract gameballId from response
       result = {
@@ -182,10 +171,7 @@ export class GameballApp {
       this.sessionToken = sessionToken || null;
 
       // Use the event data directly as it now matches the expected structure
-      const eventPromise = this.makeRequest(API_ENDPOINTS.EVENTS, event);
-      // Fire telemetry immediately after dispatching the request.
-      GameballLogger.log('sdk.sendEvent', event);
-      await eventPromise;
+      await this.makeRequest(API_ENDPOINTS.EVENTS, event);
     } catch (error) {
       callback?.onError?.(
         error instanceof Error
