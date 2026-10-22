@@ -30,7 +30,8 @@ export const ModalMetrics = {
   margin: 24,
   maxWidth: 420,
   cornerRadius: 16,
-  contentPadding: { top: 20, horizontal: 20 },
+  /** `bottom` only when no buttons follow the copy: a buttons row carries the inset beneath it. */
+  contentPadding: { top: 20, horizontal: 20, bottom: 20 },
   headerToBodySpacing: 8,
   buttonsPadding: { top: 20, horizontal: 20, bottom: 16 },
   buttonSpacing: 8,
@@ -74,7 +75,8 @@ export const SlideupMetrics = {
 } as const;
 
 export const FullscreenMetrics = {
-  contentPadding: { top: 24, horizontal: 24 },
+  /** `bottom` only when no buttons follow the copy: a buttons row carries the inset beneath it. */
+  contentPadding: { top: 24, horizontal: 24, bottom: 24 },
   /** A fixed share, not "whatever the copy leaves": an image sized by subtraction lands on
    * whatever ratio is left over and letterboxes when that does not match the artwork. */
   imageHeightFraction: 0.5,

@@ -152,7 +152,12 @@ export function FullscreenView({
               {image ? (
                 <View testID="gb-iam-image-spacer" style={styles.imageSpacer} />
               ) : null}
-              <ScrollView contentContainerStyle={styles.copy}>
+              <ScrollView
+                contentContainerStyle={[
+                  styles.copy,
+                  message.buttons.length === 0 ? styles.copyLast : null,
+                ]}
+              >
                 <Copy
                   header={message.header}
                   body={message.body}
@@ -229,6 +234,9 @@ const styles = StyleSheet.create({
     paddingTop: FullscreenMetrics.contentPadding.top,
     paddingHorizontal: FullscreenMetrics.contentPadding.horizontal,
   },
+  /** The copy is the surface's last block: with no buttons row beneath it, it carries its own
+   * inset there, or its last line runs into the bottom edge. */
+  copyLast: { paddingBottom: FullscreenMetrics.contentPadding.bottom },
   buttons: {
     gap: FullscreenMetrics.buttonSpacing,
     paddingTop: FullscreenMetrics.buttonsPadding.top,
