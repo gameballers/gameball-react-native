@@ -130,13 +130,18 @@ export class GameballApp {
       // Store customer preferred language for widget display
       const preferredLanguage = request.customerAttributes?.preferredLanguage;
       if (preferredLanguage && preferredLanguage.trim() !== '') {
-        this.setCustomerPreferredLanguage(LanguageUtils.normalize(preferredLanguage));
+        this.setCustomerPreferredLanguage(
+          LanguageUtils.normalize(preferredLanguage)
+        );
       }
 
       // Process the request with internal fields (osType, channel)
       const processedRequest = this.processCustomerAttributes(request);
 
-      const response = await this.makeRequest(API_ENDPOINTS.CUSTOMERS, processedRequest);
+      const response = await this.makeRequest(
+        API_ENDPOINTS.CUSTOMERS,
+        processedRequest
+      );
 
       // Extract gameballId from response
       result = {
@@ -233,7 +238,9 @@ export class GameballApp {
       () => callback?.onSuccess?.(true),
       (error) =>
         callback?.onError?.(
-          error instanceof Error ? error : new Error(ERROR_MESSAGES.PUSH_CLICK_FAILED)
+          error instanceof Error
+            ? error
+            : new Error(ERROR_MESSAGES.PUSH_CLICK_FAILED)
         )
     );
     return true;
@@ -246,7 +253,10 @@ export class GameballApp {
    *                       If provided, overrides the global sessionToken.
    *                       If not provided (undefined), clears the global sessionToken.
    */
-  async showProfile(request: ShowProfileRequest, sessionToken?: string | null): Promise<void> {
+  async showProfile(
+    request: ShowProfileRequest,
+    sessionToken?: string | null
+  ): Promise<void> {
     this.ensureInitialized();
 
     // Override or clear sessionToken - always update on every call
@@ -255,7 +265,11 @@ export class GameballApp {
     // Initialize the widget with the SDK configuration
     await GameballWidget.init({
       apiKey: this.apiKey,
-      lang: LanguageUtils.resolve(this.lang, this.customerPreferredLanguage, request.lang),
+      lang: LanguageUtils.resolve(
+        this.lang,
+        this.customerPreferredLanguage,
+        request.lang
+      ),
       shop: this.config?.shop,
       platform: this.config?.platform,
       sessionToken: this.sessionToken || undefined,
@@ -274,7 +288,9 @@ export class GameballApp {
 
     // Show the mounted <GameballWidget /> with the configuration above
     if (!GameballWidget.showActiveProfile() && __DEV__) {
-      console.warn('[GameballApp] showProfile: no <GameballWidget /> is mounted to show');
+      console.warn(
+        '[GameballApp] showProfile: no <GameballWidget /> is mounted to show'
+      );
     }
 
     // showProfile renders a webview (never hits the backend), so log it here.
@@ -349,7 +365,9 @@ export class GameballApp {
   // Private helper methods
   private setCustomerPreferredLanguage(language: string): void {
     this.customerPreferredLanguage = language;
-    AsyncStorage.setItem(CUSTOMER_PREFERRED_LANGUAGE_KEY, language).catch(() => {});
+    AsyncStorage.setItem(CUSTOMER_PREFERRED_LANGUAGE_KEY, language).catch(
+      () => {}
+    );
   }
 
   private ensureInitialized(): void {
@@ -364,7 +382,8 @@ export class GameballApp {
     }
 
     // Validate that device token and push provider are both provided or both null
-    const hasDeviceToken = request.deviceToken != null && request.deviceToken.trim() !== '';
+    const hasDeviceToken =
+      request.deviceToken != null && request.deviceToken.trim() !== '';
     const hasPushProvider = request.pushProvider != null;
 
     if (hasPushProvider && !hasDeviceToken) {
@@ -380,8 +399,8 @@ export class GameballApp {
     // Create internal request with osType and isGuest
     const internalRequest = {
       ...request,
-      osType: this.os,  // Always set internally
-      isGuest: false,  // Hardcoded: the SDK never initializes a customer as a guest
+      osType: this.os, // Always set internally
+      isGuest: false, // Hardcoded: the SDK never initializes a customer as a guest
     };
 
     // If customerAttributes is null/undefined, initialize with default channel
@@ -389,18 +408,19 @@ export class GameballApp {
       return {
         ...internalRequest,
         customerAttributes: {
-          channel: 'mobile'  // Always set internally
-        }
+          channel: 'mobile', // Always set internally
+        },
       };
     }
 
     // Extract customAttributes and additionalAttributes from customerAttributes
-    const { customAttributes, additionalAttributes, ...standardAttrs } = request.customerAttributes;
+    const { customAttributes, additionalAttributes, ...standardAttrs } =
+      request.customerAttributes;
 
     // Build the processed customerAttributes object
     const processedCustomerAttributes: any = {
       channel: 'mobile', // Always set internally
-      ...standardAttrs
+      ...standardAttrs,
     };
 
     // Map customAttributes to 'custom' property
@@ -415,18 +435,24 @@ export class GameballApp {
 
     return {
       ...internalRequest,
-      customerAttributes: processedCustomerAttributes
+      customerAttributes: processedCustomerAttributes,
     };
   }
 
-  private async makeRequest(endpoint: string, data?: any, method: 'GET' | 'POST' = 'POST'): Promise<any> {
+  private async makeRequest(
+    endpoint: string,
+    data?: any,
+    method: 'GET' | 'POST' = 'POST'
+  ): Promise<any> {
     const baseUrl = this.config?.apiPrefix || API_ENDPOINTS.BASE_URL;
     let url: string;
-    
+
     if (endpoint === API_ENDPOINTS.BOT_SETTINGS) {
       url = `${baseUrl}${endpoint}`;
     } else {
-      const apiVersion = this.sessionToken ? API_ENDPOINTS.API_V4_1 : API_ENDPOINTS.API_V4_0;
+      const apiVersion = this.sessionToken
+        ? API_ENDPOINTS.API_V4_1
+        : API_ENDPOINTS.API_V4_0;
       url = `${baseUrl}${apiVersion}${endpoint}`;
     }
 
@@ -469,7 +495,11 @@ export class GameballApp {
 
   private async fetchBotSettings(): Promise<void> {
     try {
-      const response = await this.makeRequest(API_ENDPOINTS.BOT_SETTINGS, null, 'GET');
+      const response = await this.makeRequest(
+        API_ENDPOINTS.BOT_SETTINGS,
+        null,
+        'GET'
+      );
 
       if (response && response.response) {
         this.mainColor = response.response.botMainColor.replace('#', '');
