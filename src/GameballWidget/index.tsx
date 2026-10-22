@@ -333,14 +333,16 @@ class GameballWidget extends React.Component<Props, State> {
              window.ReactNativeWebView.postMessage('share:' + JSON.stringify(param));
           };
         };
-        // Bridge widget → host events: the widget calls window.WidgetEvent.postEvent(rawJson).
+        /* Block comments only: JSX collapses this string onto one line, so a // comment would
+           disable everything after it. */
+        /* Bridge widget → host events: the widget calls window.WidgetEvent.postEvent(rawJson). */
         window.WidgetEvent = window.WidgetEvent || {};
         window.WidgetEvent.postEvent = function (raw) {
           window.ReactNativeWebView.postMessage(
             'widgetEvent:' + (typeof raw === 'string' ? raw : JSON.stringify(raw))
           );
         };
-        // Bridge widget-initiated close: window.GameballWidget.closeWidget() dismisses the widget.
+        /* Bridge widget-initiated close: window.GameballWidget.closeWidget() dismisses the widget. */
         window.GameballWidget = window.GameballWidget || {};
         window.GameballWidget.closeWidget = function () {
           window.ReactNativeWebView.postMessage('closeWidget:');
