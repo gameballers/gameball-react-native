@@ -4,39 +4,103 @@ This file contains detailed release notes for the latest version. For complete v
 
 ---
 
-## Latest Release: v3.1.2
+## Latest Release: v3.3.1
 
-**Release Date**: April 8, 2026
-**Version**: 3.1.2
-**Type**: Patch Release
+**Release Date**: October 23, 2026
+**Version**: 3.3.1
+**Type**: Feature Release
 
 ---
 
 ## 🎉 What's New
 
-v3.1.2 fixes a widget loading delay caused by `srcdoc` iframe blocking and replaces the profile widget's modal with a custom animated implementation. All existing code continues to work without modifications.
+v3.3.1 brings the React Native SDK to parity with the iOS, Android and Flutter 3.3.x SDKs. It includes everything from 3.2.0, 3.3.0 and 3.3.1, which were not published separately for React Native.
 
-### Widget Loading Fix
+### Language Control
+- `setLanguage(lang)` changes the SDK language at runtime and syncs it to the customer's preferred language
+- `ShowProfileRequest.lang` overrides the language for one presentation
+- Unsupported codes fall back to `en`
 
-The profile widget no longer experiences loading delays caused by blocked `about:blank` iframe origins. The widget now opens instantly with a smooth spring animation.
+### Widget Events and Dismissal
+- `widgetEventCallback` receives widget events (e.g. game completion) as a `{ type, metadata }` object
+- `GameballApp.hideProfile()` closes the widget, and the widget can close itself via `window.GameballWidget.closeWidget()`
 
-### Custom Animated Modal
+### External Links
+- Gameball links load inside the widget; other links go to `externalLinkCallback`, or the device browser when none is set
+- Links tagged `gbExternalBrowser=true` always open in the device browser
 
-The profile widget's modal (previously using `react-native-modal`) has been replaced with a lightweight custom implementation:
-- Slide-up spring animation on open
-- Tappable backdrop to dismiss
-- Lazy WebView rendering — the widget isn't loaded until first open
-- WebView reloads on re-open to ensure fresh content
+### Push Click Tracking
+- `handlePushClick(payload, callback?, sessionToken?)` reports Gameball push notification taps to count campaign clicks
+
+### Customer Contact on showProfile
+- Optional `mobile` and `email` on `ShowProfileRequest`
+
+---
+
+## 🚀 Key Features
+
+### Language Control
+
+```typescript
+const gameballApp = GameballApp.getInstance();
+
+// Change the global language at runtime (also synced to the customer's profile)
+gameballApp.setLanguage('ar');
+
+// Override the language for one presentation only
+await gameballApp.showProfile({ customerId: 'customer-123', lang: 'en' });
+```
+
+### Widget Events, Links and Dismissal
+
+```typescript
+await gameballApp.showProfile({
+  customerId: 'customer-123',
+  widgetEventCallback: (event, error) => {
+    if (error) return console.warn(error);
+    console.log(event?.type, event?.metadata);
+  },
+  externalLinkCallback: (url) => Linking.openURL(url),
+});
+
+// Close the widget from the app
+gameballApp.hideProfile();
+```
+
+### Push Click Tracking
+
+```typescript
+messaging().onNotificationOpenedApp((remoteMessage) => {
+  const isGameball = GameballApp.getInstance().handlePushClick(remoteMessage.data, {
+    onError: (error) => console.warn(error),
+  });
+});
+```
+
+---
+
+## ⚠️ Breaking Changes
+
+**None.** No public API was removed or renamed. See the behaviour changes below and in [MIGRATION.md](./MIGRATION.md).
 
 ---
 
 ## 🔄 Changes
 
-- Fixed widget loading delay caused by `srcdoc` iframe `about:blank` origin blocking
-- Replaced `react-native-modal` usage in profile widget with custom `Animated` slide-up modal
-- Widget WebView is lazily rendered on first open
-- WebView reloads on subsequent opens for fresh content
-- Added `about:*` to allowed WebView origins
+- `GameballApp.showProfile()` now opens the mounted `<GameballWidget />`
+- Successful `sendEvent` / `initializeCustomer` responses with an empty body are no longer reported as failures
+- An exception thrown in `onSuccess` is no longer reported to `onError`
+- All widget URL values are encoded
+- API requests send the resolved `lang` header
+- The customer preferred language is kept after an app relaunch
+- `hideNavigation: false` is sent to the widget
+- `showProfile` honours `showCloseButton: false`
+- `sessionToken` and `closeButtonColor` apply to one `showProfile` call; the widget no longer reuses previous values
+- The close button follows the widget language
+- Customers are always initialized as registered (`isGuest` is deprecated and ignored)
+- Telemetry is only sent for `showProfile`
+- `changeLanguage` is deprecated in favour of `setLanguage`
+- Native dependencies are declared as peer dependencies
 
 ---
 
@@ -52,20 +116,16 @@ The profile widget's modal (previously using `react-native-modal`) has been repl
 
 ## Migration
 
-No changes required. Existing v3.1.1, v3.1.0, and v3.0.0 code works without modifications.
-
-The profile widget no longer uses `react-native-modal` internally, but the dependency is still required by in-app notifications.
-
-See [MIGRATION.md](./MIGRATION.md) for details.
+No breaking API changes. Check the behaviour changes (`showProfile` now opens the widget, `isGuest` ignored, language fallback) in [MIGRATION.md](./MIGRATION.md).
 
 ---
 
 ## Installation
 
 ```bash
-npm install react-native-gameball@^3.1.2
+npm install react-native-gameball@^3.3.1
 # or
-yarn add react-native-gameball@^3.1.2
+yarn add react-native-gameball@^3.3.1
 ```
 
 ---
@@ -75,6 +135,20 @@ yarn add react-native-gameball@^3.1.2
 - 📧 Email: support@gameball.co
 - 📖 Documentation: https://developer.gameball.co/
 - 🐛 Issues: https://github.com/gameballers/gameball-react-native/issues
+
+---
+
+## Previous Release: v3.1.2
+
+**Release Date**: April 8, 2026
+**Version**: 3.1.2
+**Type**: Patch Release
+
+---
+
+### What's New
+
+v3.1.2 fixes a widget loading delay caused by `srcdoc` iframe blocking and replaces the profile widget's modal with a custom animated `Animated` slide-up modal. The widget WebView is rendered lazily on first open and reloads on re-open.
 
 ---
 
@@ -309,19 +383,19 @@ const gameballConfig = {
 
 ### npm
 ```bash
-npm install react-native-gameball@^3.1.2
+npm install react-native-gameball@^3.3.1
 npm install react-native-webview
 ```
 
 ### yarn
 ```bash
-yarn add react-native-gameball@^3.1.2
+yarn add react-native-gameball@^3.3.1
 yarn add react-native-webview
 ```
 
 ### GitHub
 ```bash
-npm install gameballers/gameball-react-native#release-3.1.2
+npm install gameballers/gameball-react-native#release-3.3.1
 ```
 
 ---
@@ -343,6 +417,6 @@ We thank our development community for their feedback on security features.
 
 ---
 
-**Ready to upgrade?** Simply update your dependency to v3.1.2. No migration required!
+**Ready to upgrade?** Simply update your dependency to v3.3.1. No migration required!
 
 *For technical support, contact us at support@gameball.co*

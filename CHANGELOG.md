@@ -4,6 +4,45 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [3.3.1] - 2026-10-23 📱
+
+> **Feature Release**: Brings the React Native SDK to parity with the iOS, Android and Flutter 3.3.x SDKs. Includes the 3.2.0, 3.3.0 and 3.3.1 changes, which were not published separately for React Native.
+
+### ✨ Added
+- 🎁 **Widget Events**: Added `widgetEventCallback` to `ShowProfileRequest`, which receives widget events (e.g. game completion) as a `{ type, metadata }` object (3.2.0)
+- 🎁 **Dismiss the Widget**: Added `GameballApp.hideProfile()`, and the widget can now close itself through `window.GameballWidget.closeWidget()` (3.2.0)
+- ⚙️ **External Link Handling**: Added `externalLinkCallback` to `ShowProfileRequest` for links that leave the widget; links tagged `gbExternalBrowser=true` always open in the device browser (3.2.0)
+- ⚙️ **Customer Contact on showProfile**: Added optional `mobile` and `email` to `ShowProfileRequest` (3.2.0)
+- 🔧 **SDK Telemetry**: Added fire-and-forget reporting of `showProfile` calls to Gameball's mobile logs endpoint (3.2.0)
+- ⚙️ **Per-call Language**: Added optional `lang` to `ShowProfileRequest` for a single widget presentation (3.3.0)
+- ⚙️ **Global Language**: Added `setLanguage(lang)` to change the SDK language without calling `init()` again (3.3.0)
+- 🎁 **Push Click Tracking**: Added `handlePushClick(payload, callback?, sessionToken?)` to report Gameball push notification taps as campaign clicks (3.3.0)
+
+### 🔄 Changed
+- 🔧 **Registered Customers Only**: Changed `initializeCustomer` to always send `isGuest: false`; `InitializeCustomerRequest.isGuest` is deprecated and ignored (3.3.1)
+- 🔧 **Reduced Telemetry**: Limited diagnostic logs to `showProfile` (3.3.1)
+- 🔧 **changeLanguage**: Deprecated `changeLanguage` in favour of `setLanguage`
+- 📦 **Peer Dependencies**: Declared `@react-native-async-storage/async-storage`, `react-native-device-info`, `react-native-modal`, `react-native-push-notification-popup` and `react-native-webview` as peer dependencies
+
+### 🐛 Fixed
+- 🔧 **In-app Widget Links**: Fixed Gameball links (`gameball.app` and `*.gameball.app`) opening in the external browser instead of inside the widget (3.2.0)
+- 🔧 **showProfile**: Fixed `GameballApp.showProfile()` not opening the mounted `<GameballWidget />`
+- 🔧 **showCloseButton**: Fixed `showProfile` ignoring `showCloseButton: false`
+- 🔧 **closeButtonColor**: Fixed the close button keeping a previous custom color when a later `showProfile` call omits `closeButtonColor`
+- 🔧 **setLanguage Priority**: Fixed a stale customer preferred language outranking `setLanguage`; the language is now synced to the last initialized customer's profile (3.3.1)
+- 🔧 **Language After Relaunch**: Fixed the customer preferred language (including `setLanguage`) being lost after an app relaunch (3.3.2 on iOS)
+- 🔧 **Unsupported Languages**: Fixed unsupported language codes being sent as-is; they now fall back to `en` (3.3.1)
+- 🔧 **Close Button Direction**: Fixed the close button following the device locale instead of the widget language (3.3.1)
+- 🔧 **Language Header**: Fixed API requests missing the `lang` header sent by the other SDKs
+- 🔧 **sendEvent / initializeCustomer**: Fixed successful responses with an empty body being reported as failures, and an exception thrown in `onSuccess` also reaching `onError` (3.3.1)
+- 🔧 **Widget URL Encoding**: Fixed widget URL values with special characters (e.g. `+`, `&`) not being encoded (3.3.1)
+- 🔧 **hideNavigation**: Fixed `hideNavigation: false` being dropped from the widget URL
+
+### 🔒 Security
+- 🛡️ **Widget Session Token**: Fixed the widget reusing a previous `sessionToken` when a later `showProfile` call omits it
+
+---
+
 ## [3.1.2] - 2026-04-08 🔧
 
 > **Patch Release**: Fix widget loading delay caused by srcdoc iframe blocking

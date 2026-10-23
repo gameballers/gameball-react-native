@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-3.1.2-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-3.3.1-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -160,10 +160,58 @@ The SDK provides the following public methods:
 - `initializeCustomer(request, callback?)` - Register/initialize customer
 - `sendEvent(event, callback?)` - Track user events
 - `showProfile(request)` - Display profile widget
-- `changeLanguage(language)` - Change SDK language
+- `hideProfile()` - Dismiss the profile widget
+- `setLanguage(lang)` - Change SDK language at runtime
+- `handlePushClick(payload, callback?)` - Report a push notification tap
+- `changeLanguage(language)` - Change SDK language (deprecated, use `setLanguage`)
 - `getReferralCode(url)` - Extract referral code from URL
 
 ## Advanced Usage
+
+### Language Control (v3.3.1+)
+
+```typescript
+const gameballApp = GameballApp.getInstance();
+
+// Change the global language without re-calling init().
+// Also synced to the last initialized customer's preferred language.
+gameballApp.setLanguage('ar');
+
+// Override the language for one presentation only
+await gameballApp.showProfile({ customerId: 'customer-123', lang: 'en' });
+```
+
+The widget language resolves in this order: `ShowProfileRequest.lang`, then the customer's `preferredLanguage`, then the global language, then `en`. Unsupported codes fall back to `en`.
+
+### Widget Events and Closing the Widget (v3.3.1+)
+
+```typescript
+await gameballApp.showProfile({
+  customerId: 'customer-123',
+  // Widget events (e.g. game completion) as a { type, metadata } object
+  widgetEventCallback: (event, error) => {
+    if (error) return console.warn(error);
+    console.log(event?.type, event?.metadata);
+  },
+  // Links leaving the widget; links tagged gbExternalBrowser=true always open in the device browser
+  externalLinkCallback: (url) => Linking.openURL(url),
+});
+
+// Close the widget from the app
+gameballApp.hideProfile();
+```
+
+### Push Click Tracking (v3.3.1+)
+
+Call `handlePushClick` from your notification tap handler with the notification's data payload. It returns `true` for Gameball notifications and reports the tap so the campaign click is counted.
+
+```typescript
+messaging().onNotificationOpenedApp((remoteMessage) => {
+  const isGameball = GameballApp.getInstance().handlePushClick(remoteMessage.data, {
+    onError: (error) => console.warn(error),
+  });
+});
+```
 
 ### Per-Request Session Token Override (v3.1.0+)
 
@@ -304,7 +352,7 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `customerAttributes` | CustomerAttributes | ❌ | Additional customer information |
 | `deviceToken` | string | ❌ | Push notification device token |
 | `pushProvider` | PushProvider | ❌ | Push notification provider |
-| `isGuest` | boolean | ❌ | Whether customer is a guest user |
+| `isGuest` | boolean | ❌ | Deprecated and ignored since v3.3.1: customers are always registered |
 
 **Validation Rules:**
 - `customerId` cannot be empty or whitespace
@@ -320,6 +368,11 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `hideNavigation` | boolean | ❌ | Hide widget navigation |
 | `widgetUrlPrefix` | string | ❌ | Custom widget URL prefix |
 | `closeButtonColor` | string | ❌ | Close button color (hex code) |
+| `mobile` | string | ❌ | Customer phone number |
+| `email` | string | ❌ | Customer email address |
+| `lang` | string | ❌ | Language for this presentation only (v3.3.1+) |
+| `externalLinkCallback` | (url: string) => void | ❌ | Handles links leaving the widget |
+| `widgetEventCallback` | (event, error?) => void | ❌ | Receives widget events (v3.3.1+) |
 
 ### CustomerAttributes
 | Parameter | Type | Required | Description |

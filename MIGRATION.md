@@ -6,10 +6,63 @@ This guide provides migration instructions for upgrading between major versions 
 
 ## Table of Contents
 
+- [v3.1.2 → v3.3.1](#migration-guide-v312--v331)
 - [v3.1.1 → v3.1.2](#migration-guide-v311--v312)
 - [v3.1.0 → v3.1.1](#migration-guide-v310--v311)
 - [v3.0.0 → v3.1.0](#migration-guide-v300--v310)
 - [v2.x → v3.0.0](#migration-guide-v2x--v300)
+
+---
+
+## Migration Guide: v3.1.2 → v3.3.1
+
+Version 3.3.1 brings the React Native SDK to parity with the other Gameball SDKs (it includes 3.2.0, 3.3.0 and 3.3.1). There are no breaking API changes, but check the behaviour changes below.
+
+### Update Dependencies
+
+```bash
+npm install react-native-gameball@^3.3.1
+# or
+yarn add react-native-gameball@^3.3.1
+```
+
+The SDK now declares its native dependencies as peer dependencies. Make sure your app installs them:
+
+```bash
+yarn add @react-native-async-storage/async-storage react-native-device-info react-native-modal react-native-push-notification-popup react-native-webview
+```
+
+### Behaviour Changes
+
+- **`showProfile()` opens the widget.** `GameballApp.getInstance().showProfile(request)` now opens the mounted `<GameballWidget />`. If you called it only to configure the widget and opened it later with `widgetRef.current.showProfile()`, remove the second call or move `showProfile()` to where the widget should open.
+- **`isGuest` is ignored.** Customers are always initialized as registered.
+- **Unsupported language codes fall back to `en`.**
+- **`showCloseButton: false` now hides the close button.** It was ignored before.
+- **`sessionToken` and `closeButtonColor` apply per `showProfile` call.** A call without them no longer reuses the previous call's token or color.
+- **The widget language now uses `customerAttributes.preferredLanguage`** when set, before the `lang` passed to `init()`.
+
+### Optional: New APIs
+
+```typescript
+const gameballApp = GameballApp.getInstance();
+
+// Change the language at runtime (replaces changeLanguage)
+gameballApp.setLanguage('ar');
+
+// Language for one presentation, widget events and external links
+await gameballApp.showProfile({
+  customerId: 'customer-123',
+  lang: 'en',
+  widgetEventCallback: (event, error) => console.log(event?.type, event?.metadata, error),
+  externalLinkCallback: (url) => Linking.openURL(url),
+});
+
+// Close the widget
+gameballApp.hideProfile();
+
+// Report a push notification tap
+gameballApp.handlePushClick(remoteMessage.data);
+```
 
 ---
 
