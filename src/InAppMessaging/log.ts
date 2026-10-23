@@ -17,5 +17,8 @@ export function setLogEnabled(value: boolean): void {
 }
 
 export function isLogEnabled(): boolean {
-  return (globalThis as LogHost)[FLAG] ?? true;
+  // Until init() configures it, follow the build as configure() does; on in plain JS runtimes
+  return (
+    (globalThis as LogHost)[FLAG] ?? (typeof __DEV__ === 'undefined' || __DEV__)
+  );
 }

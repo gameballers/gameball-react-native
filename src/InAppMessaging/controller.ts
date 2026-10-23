@@ -27,6 +27,10 @@ export interface InAppMessagingConfig {
   appVersion?: string;
   /** Console diagnostics, prefixed `[GameballIAM]`. */
   debug?: boolean;
+  /** The SDK's current session token, sent with every in-app messaging request when set. */
+  sessionToken?: () => string | null | undefined;
+  /** Whether the Gameball profile widget is on screen. Messages wait while it is. */
+  isHostWidgetOpen?: () => boolean;
 }
 
 export interface StartInAppMessagingOptions {
@@ -111,6 +115,7 @@ export class InAppMessagingController {
       platformCode: () =>
         platformCode(Platform.OS === 'ios' ? 'ios' : 'android'),
       appVersion: () => this.config?.appVersion ?? '',
+      sessionToken: () => this.config?.sessionToken?.(),
       sdkVersion: SDK_VERSION,
     });
   }
@@ -213,7 +218,8 @@ export class InAppMessagingController {
           fetcher: (id) => api.fetchVariables(id),
         }),
         hasSurface: () => this.presenter.hasSurface,
-        isHostOverlayOpen: () => this.overlayOpen,
+        isHostOverlayOpen: () =>
+          this.overlayOpen || (this.config?.isHostWidgetOpen?.() ?? false),
         navigate: (route, args) => {
           if (this.options.onNavigate) {
             this.options.onNavigate(route, args);
@@ -319,6 +325,11 @@ export class InAppMessagingController {
     if (!open) {
       this.service?.onHostOverlayClosed();
     }
+  }
+
+  /** The profile widget closed, so a message held back while it was open may now show. */
+  onHostWidgetClosed(): void {
+    this.service?.onHostOverlayClosed();
   }
 
   onMessage(listener: (message: InAppMessage) => void): () => void {
