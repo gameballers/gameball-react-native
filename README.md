@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-3.3.1-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -12,6 +12,7 @@ Modern React Native SDK for integrating Gameball's customer engagement and loyal
 - 🎯 **Customer Management** - Initialize and manage customer profiles
 - 📊 **Event Tracking** - Track user actions and behaviors
 - 🎁 **Profile Widget** - Display customer loyalty information
+- 💬 **In-App Messaging** - Show dashboard-authored campaigns in your app, opt-in and additive
 - 🔧 **Modern Architecture** - Built with React Native best practices
 - 🛡️ **Type Safety** - Full TypeScript support with comprehensive type definitions
 - ⚡ **Promise-based API** - Modern async/await support with optional callbacks
@@ -24,8 +25,13 @@ Modern React Native SDK for integrating Gameball's customer engagement and loyal
 - **Target React Native Version**: Latest
 - **TypeScript**: 4.0+
 - **Node.js**: 18.0+
-- **iOS**: 12.0+
-- **Android**: API Level 21+
+- **iOS**: 15.0+
+- **Android**: API Level 24+ (Android 7.0)
+- **Peer Dependencies**: `@react-native-async-storage/async-storage`, `react-native-device-info`, `react-native-modal`, `react-native-push-notification-popup` and `react-native-webview` are required; `react-native-safe-area-context` is optional (see [Peer Dependencies](#peer-dependencies))
+
+> **Note**: Set your app's Android `minSdkVersion` to 24 or higher and its iOS deployment target
+> (`IPHONEOS_DEPLOYMENT_TARGET` and the Podfile `platform :ios`) to 15.0 or higher. As of v4.0.0,
+> earlier versions aren't supported.
 
 ## Installation
 
@@ -41,11 +47,11 @@ yarn add react-native-gameball
 
 ### Peer Dependencies
 ```bash
-# React Native WebView (required for profile widget)
-npm install react-native-webview
+# Required
+npm install @react-native-async-storage/async-storage react-native-device-info react-native-modal react-native-push-notification-popup react-native-webview
 
-# AsyncStorage (optional, for enhanced functionality)
-npm install @react-native-async-storage/async-storage
+# Optional: exact safe-area placement for in-app messages (v4.0.0+)
+npm install react-native-safe-area-context
 ```
 
 ## Quick Start
@@ -153,6 +159,104 @@ const guestRequest = {
 await GameballApp.getInstance().showProfile(guestRequest);
 ```
 
+## In-App Messaging (v4.0.0+)
+
+Displays campaigns you author in the Gameball dashboard — modals, slideup banners and fullscreen posters — inside your app.
+
+It is **opt-in and additive**. Until you call `startInAppMessaging`, the module makes no requests, starts no timers, draws nothing and stores nothing, so upgrading without calling it changes nothing about how your app behaves.
+
+> In-app messaging needs the `integrations/inapp-messages` endpoints enabled for your account. Where they are not, the SDK records the 404 in its diagnostic log and stays silent.
+
+### Opting in
+
+Messages are drawn on `<GameballInAppMessages />`. Mount it once, near the root of your app and above your navigator:
+
+```tsx
+import GameballApp, { GameballInAppMessages } from 'react-native-gameball';
+
+export default function App() {
+  return (
+    <>
+      <NavigationContainer>{/* your app */}</NavigationContainer>
+      <GameballInAppMessages />
+    </>
+  );
+}
+```
+
+Then start messaging once the customer is known:
+
+```typescript
+await GameballApp.getInstance().startInAppMessaging({ customerId: 'customer-123' });
+```
+
+`customerId` defaults to the customer passed to the last successful `initializeCustomer`. Awaiting the call is optional; it resolves once the customer's stored message history has loaded and campaigns have synced.
+
+Call `stopInAppMessaging()` on logout. It dismisses anything on screen, sends pending analytics and clears state.
+
+If your app uses `react-native-safe-area-context`, messages are placed clear of the notch and the home indicator. To pass your own insets instead: `<GameballInAppMessages insets={useSafeAreaInsets()} />`.
+
+### What triggers a message
+
+**Session start** — on launch, and again when the app returns to the foreground after more than `sessionTimeoutSeconds` (30 seconds by default).
+
+**Custom events** — a campaign can target an event by name and filter on its metadata:
+
+```typescript
+await GameballApp.getInstance().sendEvent({
+  customerId: 'customer-123',
+  events: { add_to_cart: { productId: 'sku-001' } },
+});
+```
+
+A campaign on `add_to_cart` can require `productId` to equal `sku-001`, or `price` to be above a number, and so on. A purchase logged through `logPurchase` reaches campaigns as an event named `purchase` whose `productId`, `price`, `currency` and `quantity` are available to filters.
+
+Whether a matching campaign actually appears also depends on its frequency cap, the minimum interval between any two displays, its expiry and its priority — all set in the dashboard.
+
+### Controlling display
+
+```typescript
+await GameballApp.getInstance().startInAppMessaging({
+  customerId: 'customer-123',
+
+  // Show it, hold it for the next opportunity, or drop it.
+  beforeDisplay: (message) => (isCheckingOut ? 'later' : 'show'),
+
+  // Return true if you handled the tap; false lets the SDK act.
+  // `button` is null when the message surface itself was tapped.
+  onAction: (message, button, action) => false,
+
+  // Route a campaign's navigate action through your navigator.
+  onNavigate: (route, args) => navigation.navigate(route, args),
+});
+```
+
+Messages wait while the Gameball profile widget or another message is open. To hold them while your own modal, drawer or checkout step is up:
+
+```typescript
+GameballApp.getInstance().setOverlayOpen(true);
+// ... later
+GameballApp.getInstance().setOverlayOpen(false);
+```
+
+`onInAppMessage` reports every message the SDK selects, whatever happens to it afterwards:
+
+```typescript
+const unsubscribe = GameballApp.getInstance().onInAppMessage((message) => {
+  console.log('selected', message.id);
+});
+```
+
+### Personalisation
+
+Campaign text can contain `{token}` placeholders. Just before a message with placeholders is shown, the SDK fetches the customer's current values and fills them in, so a points balance is current at the moment it appears. The fetch waits at most two seconds and its result is cached for a minute. If the values don't arrive in time, the placeholders are removed rather than shown as raw `{braces}`, and the message still appears. Messages with no placeholders skip the fetch entirely.
+
+> Requires `integrations/inapp-messages/variables` to be enabled for your account. Until then, placeholders are removed from the text.
+
+### Analytics
+
+Impressions, clicks and dismissals are reported automatically — no integration required. A button tap is reported as a click carrying that button's id. Events are batched and persisted to device storage, so analytics logged just before the app is killed still arrive on the next launch.
+
 ## API Methods
 
 The SDK provides the following public methods:
@@ -165,6 +269,12 @@ The SDK provides the following public methods:
 - `handlePushClick(payload, callback?)` - Report a push notification tap
 - `changeLanguage(language)` - Change SDK language (deprecated, use `setLanguage`)
 - `getReferralCode(url)` - Extract referral code from URL
+- `logPurchase(purchase, callback?, sessionToken?)` - Report a purchase, which in-app messaging campaigns can target and filter on (v4.0.0+)
+- `startInAppMessaging(options?)` - Opt in to in-app messaging (v4.0.0+)
+- `stopInAppMessaging()` - Stop it and clear state; call on logout (v4.0.0+)
+- `isInAppMessagingStarted` - Whether in-app messaging is currently running (v4.0.0+)
+- `onInAppMessage(listener)` - Observe every in-app message the SDK selects; returns an unsubscribe function (v4.0.0+)
+- `setOverlayOpen(open)` - Hold in-app messages while your own overlay is open (v4.0.0+)
 
 ## Advanced Usage
 
@@ -326,6 +436,10 @@ GameballApp.getInstance().initializeCustomer(request, {
 });
 ```
 
+## Migration from v3.x
+
+⚠️ **Version 4.0.0 is a major release** that adds in-app messaging. Every v3.x call keeps its signature and behaviour; the breaking change is the raised platform minimums — **iOS 15.0+** (was 12.0) and **Android API 24+** (was API 21). See the [Migration Guide](./MIGRATION.md#migration-guide-v3x--v400) for details.
+
 ## Migration from v2.x
 
 ⚠️ **Version 3.0.0 contains breaking changes**. See [Migration Guide](./MIGRATION.md) for detailed upgrade instructions.
@@ -341,6 +455,7 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `platform` | string | ❌ | Platform identifier |
 | `sessionToken` | string | ❌ | Session Token for secure authentication (enables automatic v4.1 endpoint routing) |
 | `apiPrefix` | string | ❌ | Custom API base URL |
+| `debug` | boolean | ❌ | In-app messaging console logs, prefixed `[GameballIAM]`. Defaults to `__DEV__` (v4.0.0+) |
 
 ### InitializeCustomerRequest
 | Parameter | Type | Required | Description |
@@ -397,6 +512,57 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `mobile` | string | ❌ | Customer phone number |
 | `email` | string | ❌ | Customer email address |
 
+### StartInAppMessagingOptions
+Options for `startInAppMessaging` (v4.0.0+). All are optional.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `customerId` | string | ❌ | Customer the campaigns are fetched for. Defaults to the customer passed to the last successful `initializeCustomer` |
+| `beforeDisplay` | (message) => 'show' \| 'later' \| 'discard' | ❌ | Called before each message; shows every message when omitted |
+| `onAction` | (message, button, action) => boolean | ❌ | Called on a tap; return `true` if you handled it, `false` to let the SDK act. `button` is null when the message itself was tapped |
+| `onNavigate` | (route, args?) => void | ❌ | Called when a campaign navigates. Without it, navigate actions are ignored |
+| `onMessage` | (message) => void | ❌ | Called with every message the SDK selects, like `onInAppMessage` |
+| `openUrl` | (url, external) => boolean \| Promise<boolean> | ❌ | Opens campaign links yourself, e.g. in an in-app browser. Links open in the system browser when omitted |
+| `requestPushPermission` | () => Promise<boolean> | ❌ | Asks for notification permission when a campaign requests it |
+| `sessionTimeoutSeconds` | number | ❌ | Time in the background after which returning starts a new session (defaults to 30). Applies when messaging first starts |
+
+**Validation Rules:**
+- Ignored, with a debug log, when `init()` hasn't been called or no customer ID is known
+- Calling it again for the same customer does nothing; a different `customerId` fetches that customer's campaigns
+
+### GameballInAppMessages
+The component in-app messages are drawn on (v4.0.0+). Mount it once, near the root of your app.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `insets` | { top?: number; bottom?: number } | ❌ | Safe-area insets. Read from `react-native-safe-area-context` when installed; otherwise the status-bar height on Android and 0 elsewhere |
+
+### Purchase
+Passed to `logPurchase`, which sends a `purchase` event that in-app messaging campaigns can target (v4.0.0+).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `customerId` | string | ✅ | Customer who made the purchase |
+| `productId` | string | ✅ | Identifier of the purchased item |
+| `price` | number | ✅ | Unit price |
+| `currency` | string | ✅ | ISO currency code, e.g. `'USD'` |
+| `quantity` | number | ❌ | Number of units (defaults to 1) |
+| `properties` | Record<string, any> | ❌ | Extra metadata, also available to campaign filters |
+
+**Example:**
+```typescript
+await GameballApp.getInstance().logPurchase(
+  {
+    customerId: 'customer-123',
+    productId: 'sku-001',
+    price: 49.99,
+    currency: 'USD',
+    quantity: 2,
+  },
+  { onSuccess: () => {}, onError: (error) => console.warn(error) }
+);
+```
+
 ## Metro Bundler / Build Configuration
 
 ### Metro Configuration
@@ -442,10 +608,21 @@ Add to your `android/app/proguard-rules.pro`:
 - Ensure TypeScript version is 4.0+
 - Run `npx tsc --noEmit` to check type errors
 
+**5. In-app messages never appear**
+- Check that `<GameballInAppMessages />` is mounted
+- Check that `startInAppMessaging` runs after `init` with a customer ID, and that in-app messaging is enabled for your account
+
+### Debug Logging
+
+In-app messaging logs why a campaign was shown or skipped, prefixed `[GameballIAM]`. These logs are on in development builds and off in release builds; to turn them on in a release build while reproducing an issue:
+```typescript
+await GameballApp.getInstance().init({ apiKey: 'your-api-key', lang: 'en', debug: true });
+```
+
 ## Documentation
 
 - 📋 **[Changelog](./CHANGELOG.md)** - Version history and changes
-- 🔄 **[Migration Guide](./MIGRATION.md)** - Upgrade from v2.x to v3.x
+- 🔄 **[Migration Guide](./MIGRATION.md)** - Upgrade instructions
 - 📝 **[Release Notes](./RELEASE_NOTES.md)** - Latest release details
 
 ## Support

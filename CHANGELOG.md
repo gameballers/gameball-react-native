@@ -4,6 +4,29 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [4.0.0] - 2026-10-23 🎉
+
+> **Major Release**: Raised the minimum supported platform versions to iOS 15.0 and Android API 24, and added in-app messaging — an opt-in module that displays campaigns authored in the Gameball dashboard inside your app
+
+### ✨ Added
+- 🏗️ **In-App Messaging**: Added `startInAppMessaging(options?)` to opt in, `stopInAppMessaging()` to stop and clear state on logout, and `<GameballInAppMessages />`, the component messages are drawn on. Nothing runs until `startInAppMessaging` is called — no requests, no timers, nothing drawn and no stored state — so upgrading without calling it changes nothing
+- 🎁 **Three Message Types**: Added modal (a centred card over a dimmed background, up to two buttons), slideup (a non-blocking banner at the top or bottom edge, dismissed by swiping toward its edge) and fullscreen (edge to edge, image over copy or artwork only) messages, chosen per campaign in the dashboard
+- 🎁 **Triggers**: Added session-start triggers, fired on launch and when the app returns to the foreground after the session timeout (30 seconds by default), and custom-event triggers matched on the event name and optionally filtered on its metadata. Events sent through `sendEvent` reach the triggers automatically
+- 🎁 **Purchase Logging**: Added `logPurchase(purchase, callback?, sessionToken?)`, which sends a `purchase` event to Gameball whose `productId`, `price`, `currency` and `quantity` are available to campaign filters
+- 🎁 **Display Rules**: Added per-campaign frequency caps that persist across restarts, a backend-controlled minimum interval between any two displays, campaign expiry, priority ordering and quiet hours. A message that can't be shown yet — because the Gameball widget, another message or one of your own overlays is open — waits for the next opportunity instead of being lost
+- 🔧 **Host Hooks**: Added `beforeDisplay` to show, postpone or discard a message, `onAction` to handle a tap yourself, `onNavigate` to route through your own navigator, `openUrl` and `requestPushPermission` to supply an in-app browser and a permission prompt, `onInAppMessage(listener)` to observe every message the SDK selects, and `setOverlayOpen(open)` to hold messages while your own modal is up
+- 🏗️ **Message Analytics**: Added automatic impression, click and dismissal reporting. Events are batched and kept on the device until delivered, so events logged just before the app is closed are sent on the next launch
+- 🎁 **Personalisation**: Added `{token}` placeholders in campaign text, filled with the customer's current values fetched just before a message is shown. The fetch waits at most two seconds; if the values don't arrive, the placeholders are removed and the message still shows
+- 🏗️ **Offline Campaigns**: Added a per-customer campaign cache, so a failed sync falls back to the last unexpired campaigns
+- ⚙️ **Diagnostic Logging Switch**: Added `debug` to `GameballConfig` to control in-app messaging console logs; it defaults to `__DEV__`, so logs are on in development builds and off in release builds
+
+### 🔄 Changed
+- 💥 **BREAKING**: **Minimum iOS Version**: Raised the minimum supported iOS version from 12.0 to 15.0
+- 💥 **BREAKING**: **Minimum Android Version**: Raised the minimum supported Android version from API 21 (Android 5.0) to API 24 (Android 7.0)
+- 📦 **Peer Dependencies**: Added `react-native-safe-area-context` as an optional peer dependency; when installed, messages are placed clear of the notch and home indicator
+
+---
+
 ## [3.3.1] - 2026-10-23 📱
 
 > **Feature Release**: Brings the React Native SDK to parity with the iOS, Android and Flutter 3.3.x SDKs. Includes the 3.2.0, 3.3.0 and 3.3.1 changes, which were not published separately for React Native.

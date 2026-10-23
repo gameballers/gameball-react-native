@@ -1,6 +1,6 @@
 # Gameball React Native SDK - Example App
 
-This example demonstrates how to integrate and use the Gameball React Native SDK v3.3.1 in a React Native application.
+This example demonstrates how to integrate and use the Gameball React Native SDK v4.0.0 in a React Native application.
 
 ## Features Demonstrated
 
@@ -10,6 +10,8 @@ This example demonstrates how to integrate and use the Gameball React Native SDK
 - 📊 **Event Tracking** - Track custom events with flexible authentication
 - 🎁 **Profile Widget** - Display customer loyalty profiles (authenticated & guest mode)
 - 🆕 **Guest Mode** - Show profile widget without customer authentication (v3.1.1+)
+- 💬 **In-App Messaging** - Display dashboard campaigns with `startInAppMessaging` on `<GameballInAppMessages />`, observe them with `onInAppMessage` and stop on logout (v4.0.0+)
+- 🛒 **Purchase Logging** - Send purchase events with `logPurchase` for purchase-triggered campaigns (v4.0.0+)
 
 ## Getting Started
 
@@ -17,6 +19,8 @@ This example demonstrates how to integrate and use the Gameball React Native SDK
 
 - React Native 0.70+
 - Node.js 18+
+- iOS 15.0+ / Android API 24+ (Android 7.0)
+- The SDK's peer dependencies: `@react-native-async-storage/async-storage`, `react-native-device-info`, `react-native-modal`, `react-native-push-notification-popup` and `react-native-webview`
 - iOS development: Xcode 12+
 - Android development: Android Studio
 
@@ -125,6 +129,44 @@ await gameballApp.showProfile({
 })
 ```
 
+### 5. In-App Messaging (v4.0.0+)
+
+Messages are drawn on `<GameballInAppMessages />`, mounted once above the app's content:
+
+```tsx
+<GameballInAppMessages insets={safeAreaInsets} />
+```
+
+Messaging starts once the customer is known:
+
+```typescript
+gameballApp.startInAppMessaging({
+  customerId: "unique-customer-id",
+  beforeDisplay: (message) => 'show', // or 'later' / 'discard'
+  onAction: (message, button, action) => false, // true if you handled the tap
+})
+
+// On logout
+// gameballApp.stopInAppMessaging()
+```
+
+Campaigns are created in the Gameball dashboard, and in-app messaging must be enabled for your account. In development builds the console shows why each campaign was shown or skipped.
+
+### 6. Purchase Logging (v4.0.0+)
+
+```typescript
+gameballApp.logPurchase({
+  customerId: "unique-customer-id",
+  productId: "sku-001",
+  price: 49.99,
+  currency: "USD",
+})
+```
+
+## In-App Messaging Sample
+
+`GameballIAMSample/` is a separate app for exercising in-app messaging on a device. Copy `src/config.local.example.ts` to `src/config.local.ts` (gitignored) and fill in your API key before running it.
+
 ## Key Components
 
 ### GameballApp Singleton
@@ -133,11 +175,15 @@ The main SDK entry point that manages configuration and API calls.
 ### GameballWidget Component
 A React component that displays the customer loyalty profile widget.
 
+### GameballInAppMessages Component
+The component in-app messages are drawn on (v4.0.0+).
+
 ### TypeScript Interfaces
 - `GameballConfig` - SDK configuration
 - `InitializeCustomerRequest` - Customer initialization data
 - `CustomerAttributes` - Customer profile attributes
 - `Event` - Event tracking data
+- `Purchase` - Purchase data for `logPurchase` (v4.0.0+)
 - `Callback<T>` - Success/error callback pattern
 
 ## Configuration

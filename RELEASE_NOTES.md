@@ -4,103 +4,148 @@ This file contains detailed release notes for the latest version. For complete v
 
 ---
 
-## Latest Release: v3.3.1
+## Latest Release: v4.0.0
 
 **Release Date**: October 23, 2026
-**Version**: 3.3.1
-**Type**: Feature Release
+**Version**: 4.0.0
+**Type**: Major Release
 
 ---
 
 ## 🎉 What's New
 
-v3.3.1 brings the React Native SDK to parity with the iOS, Android and Flutter 3.3.x SDKs. It includes everything from 3.2.0, 3.3.0 and 3.3.1, which were not published separately for React Native.
+v4.0.0 raises the minimum supported platform versions to **iOS 15.0** and **Android API 24 (Android 7.0)**, and adds **in-app messaging**: campaigns authored in the Gameball dashboard, displayed inside your app. In-app messaging is opt-in — until you call `startInAppMessaging` it makes no requests, starts no timers, stores nothing and draws nothing.
 
-### Language Control
-- `setLanguage(lang)` changes the SDK language at runtime and syncs it to the customer's preferred language
-- `ShowProfileRequest.lang` overrides the language for one presentation
-- Unsupported codes fall back to `en`
-
-### Widget Events and Dismissal
-- `widgetEventCallback` receives widget events (e.g. game completion) as a `{ type, metadata }` object
-- `GameballApp.hideProfile()` closes the widget, and the widget can close itself via `window.GameballWidget.closeWidget()`
-
-### External Links
-- Gameball links load inside the widget; other links go to `externalLinkCallback`, or the device browser when none is set
-- Links tagged `gbExternalBrowser=true` always open in the device browser
-
-### Push Click Tracking
-- `handlePushClick(payload, callback?, sessionToken?)` reports Gameball push notification taps to count campaign clicks
-
-### Customer Contact on showProfile
-- Optional `mobile` and `email` on `ShowProfileRequest`
+- **In-app messaging**: modal, slideup and fullscreen campaigns from the Gameball dashboard, drawn on `<GameballInAppMessages />`
+- **Triggers**: session start, and custom events filtered on their metadata
+- **Purchase logging**: `logPurchase(purchase)` for purchase-triggered campaigns
+- **Hooks**: `beforeDisplay`, `onAction`, `onNavigate`, `openUrl`, `requestPushPermission` and `onInAppMessage(listener)` to control display, taps and navigation
+- **Raised minimums**: iOS 15.0+ and Android API 24+ (Android 7.0)
 
 ---
 
 ## 🚀 Key Features
 
-### Language Control
+### 💬 Opting in
 
-```typescript
+```tsx
+import GameballApp, { GameballInAppMessages } from 'react-native-gameball';
+
+// Once, near the root of the app and above your navigator
+<GameballInAppMessages />
+
 const gameballApp = GameballApp.getInstance();
+await gameballApp.init({ apiKey: 'your-api-key', lang: 'en' });
+await gameballApp.initializeCustomer({ customerId: 'customer-123' });
+await gameballApp.startInAppMessaging({ customerId: 'customer-123' });
 
-// Change the global language at runtime (also synced to the customer's profile)
-gameballApp.setLanguage('ar');
-
-// Override the language for one presentation only
-await gameballApp.showProfile({ customerId: 'customer-123', lang: 'en' });
+// On logout
+gameballApp.stopInAppMessaging();
 ```
 
-### Widget Events, Links and Dismissal
+Starting for a different customer refetches campaigns and resets frequency caps, so you don't need to stop first.
+
+### 🖼️ Message types
+
+**Modal** — a card over a dimmed background, with up to two buttons.
+
+**Slideup** — a banner at the top or bottom edge. It doesn't block the app, carries no buttons (the banner itself is the tap target), and is dismissed by swiping toward its own edge.
+
+**Fullscreen** — edge to edge. A fullscreen campaign can insist on portrait or landscape, and waits until the device is turned that way.
+
+### 🎯 Triggers
+
+**Session start** fires on launch, and again when the app returns to the foreground after more than the session timeout (30 seconds by default; set it with `sessionTimeoutSeconds`).
+
+**Custom events** match on the event name and, optionally, on the event's metadata. Events you already send through `sendEvent` reach the trigger engine automatically:
 
 ```typescript
-await gameballApp.showProfile({
+await gameballApp.sendEvent({
   customerId: 'customer-123',
-  widgetEventCallback: (event, error) => {
-    if (error) return console.warn(error);
-    console.log(event?.type, event?.metadata);
-  },
-  externalLinkCallback: (url) => Linking.openURL(url),
+  events: { place_order: { total: 250 } },
 });
-
-// Close the widget from the app
-gameballApp.hideProfile();
 ```
 
-### Push Click Tracking
+### 🛒 Purchase logging
 
 ```typescript
-messaging().onNotificationOpenedApp((remoteMessage) => {
-  const isGameball = GameballApp.getInstance().handlePushClick(remoteMessage.data, {
-    onError: (error) => console.warn(error),
-  });
+await gameballApp.logPurchase({
+  customerId: 'customer-123',
+  productId: 'sku-42',
+  price: 250,
+  currency: 'USD',
 });
 ```
+
+`logPurchase` sends a `purchase` event to Gameball with `productId`, `price`, `currency` and `quantity` as metadata, whether or not in-app messaging has started, so purchase-triggered campaigns can filter on them.
+
+### 🚦 What controls whether a message shows
+
+A backend-controlled minimum interval between any two messages, per-campaign repeat rules that persist across restarts, campaign expiry and priority, and quiet hours. A message that can't be shown yet — because the Gameball profile widget, another message or one of your own overlays is open — waits and shows as soon as it can.
+
+### 🖐️ Hooks
+
+```typescript
+await gameballApp.startInAppMessaging({
+  customerId: 'customer-123',
+  // Postpone during checkout rather than interrupting it.
+  beforeDisplay: (message) => (checkoutInProgress ? 'later' : 'show'),
+  // Return true if you handled the tap yourself.
+  onAction: (message, button, action) => false,
+  // Route a campaign's navigate action through your own navigator.
+  onNavigate: (route, args) => navigation.navigate(route, args),
+});
+
+// See every message the SDK selects.
+const unsubscribe = gameballApp.onInAppMessage((message) =>
+  analytics.log('gb_message_selected', message.campaignId)
+);
+
+// Hold messages while your own modal is up.
+gameballApp.setOverlayOpen(true);
+```
+
+Every hook is optional and individually guarded: if one throws, the SDK falls back to its own handling and the message still shows. A tap is reported to Gameball whatever `onAction` returns.
+
+### 📊 Analytics and personalisation
+
+Impressions, clicks and dismissals are reported automatically, batched and kept on the device until sent. Campaign text can contain `{token}` placeholders, filled with the customer's current values just before display (waiting at most two seconds). If the values don't arrive, the placeholders are removed rather than shown as raw `{braces}`, and the message still shows.
+
+### 🔍 Diagnostics
+
+```typescript
+await gameballApp.init({ apiKey: 'your-api-key', lang: 'en', debug: true });
+```
+
+In-app messaging logs to the console with the prefix `[GameballIAM]`: on in development builds, off in release builds. Turn it on in a release build only to reproduce a reported problem.
+
+### ⚠️ Availability
+
+In-app messaging needs the in-app messaging endpoints enabled for your account. Where they aren't, the SDK logs the error in development builds and stays silent — nothing surfaces to your app.
 
 ---
 
 ## ⚠️ Breaking Changes
 
-**None.** No public API was removed or renamed. See the behaviour changes below and in [MIGRATION.md](./MIGRATION.md).
+**This is a major release.** Apps that support iOS versions below 15.0 or Android versions below API 24 must raise their minimums before upgrading.
+
+- **iOS**: minimum raised from 12.0 to **15.0**
+- **Android**: minimum raised from API 21 (Android 5.0) to **API 24 (Android 7.0)**
+
+There are no changes to the public API — every v3.x call keeps its signature and behaviour.
 
 ---
 
 ## 🔄 Changes
 
-- `GameballApp.showProfile()` now opens the mounted `<GameballWidget />`
-- Successful `sendEvent` / `initializeCustomer` responses with an empty body are no longer reported as failures
-- An exception thrown in `onSuccess` is no longer reported to `onError`
-- All widget URL values are encoded
-- API requests send the resolved `lang` header
-- The customer preferred language is kept after an app relaunch
-- `hideNavigation: false` is sent to the widget
-- `showProfile` honours `showCloseButton: false`
-- `sessionToken` and `closeButtonColor` apply to one `showProfile` call; the widget no longer reuses previous values
-- The close button follows the widget language
-- Customers are always initialized as registered (`isGuest` is deprecated and ignored)
-- Telemetry is only sent for `showProfile`
-- `changeLanguage` is deprecated in favour of `setLanguage`
-- Native dependencies are declared as peer dependencies
+- Raised the minimum supported versions to iOS 15.0 and Android API 24 (Android 7.0)
+- Added in-app messaging: `startInAppMessaging(options?)`, `stopInAppMessaging()`, `isInAppMessagingStarted` and `<GameballInAppMessages />`
+- Added modal, slideup and fullscreen messages, triggered on session start or by custom events with metadata filters
+- Added `logPurchase(purchase, callback?, sessionToken?)` to send purchase events that campaigns can target
+- Added `beforeDisplay`, `onAction`, `onNavigate`, `openUrl` and `requestPushPermission` hooks, `onInAppMessage(listener)` and `setOverlayOpen(open)`
+- Added automatic impression, click and dismissal analytics, kept on the device until sent
+- Added `debug` to `GameballConfig` to control in-app messaging console output
+- Added `react-native-safe-area-context` as an optional peer dependency
 
 ---
 
@@ -109,23 +154,24 @@ messaging().onNotificationOpenedApp((remoteMessage) => {
 - React Native 0.70.0+
 - TypeScript 4.0+
 - Node.js 18.0+
-- iOS 12.0+
-- Android API 21+
+- iOS 15.0+
+- Android API 24+ (Android 7.0)
+- Peer dependencies: `@react-native-async-storage/async-storage`, `react-native-device-info`, `react-native-modal`, `react-native-push-notification-popup` and `react-native-webview` (required); `react-native-safe-area-context` (optional)
 
 ---
 
 ## Migration
 
-No breaking API changes. Check the behaviour changes (`showProfile` now opens the widget, `isGuest` ignored, language fallback) in [MIGRATION.md](./MIGRATION.md).
+Raise your app's iOS deployment target to 15.0 and Android `minSdkVersion` to 24. No code changes are required — all v3.x calls work without modification. In-app messaging is opt-in; to adopt it, mount `<GameballInAppMessages />`, call `startInAppMessaging` once the customer is known and `stopInAppMessaging()` on logout. See [MIGRATION.md](./MIGRATION.md#migration-guide-v3x--v400).
 
 ---
 
 ## Installation
 
 ```bash
-npm install react-native-gameball@^3.3.1
+npm install react-native-gameball@^4.0.0
 # or
-yarn add react-native-gameball@^3.3.1
+yarn add react-native-gameball@^4.0.0
 ```
 
 ---
@@ -135,6 +181,16 @@ yarn add react-native-gameball@^3.3.1
 - 📧 Email: support@gameball.co
 - 📖 Documentation: https://developer.gameball.co/
 - 🐛 Issues: https://github.com/gameballers/gameball-react-native/issues
+
+---
+
+## Previous Release: v3.3.1
+
+**Release Date**: October 23, 2026
+**Version**: 3.3.1
+**Type**: Feature Release
+
+Brought the React Native SDK to parity with the other Gameball 3.3.x SDKs: `setLanguage(lang)` and per-call `lang`, `widgetEventCallback`, `hideProfile()`, `externalLinkCallback`, `handlePushClick(...)`, and `mobile` / `email` on `ShowProfileRequest`, plus fixes to `showProfile`, language handling and URL encoding. See [CHANGELOG.md](./CHANGELOG.md) for the full list.
 
 ---
 
