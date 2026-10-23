@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DeviceInfo from 'react-native-device-info';
 import GameballWidget from './GameballWidget';
 import GameballLogger from './GameballLogger';
 import { LanguageUtils } from './GameballWidget/languageUtils';
@@ -8,11 +9,16 @@ import type {
   InitializeCustomerRequest,
   InitializeCustomerResponse,
   Event,
+  Purchase,
   ShowProfileRequest,
   Callback,
   GameballSDKHeadersType,
 } from './types/Common';
 import { API_ENDPOINTS, ERROR_MESSAGES, STORAGE_KEYS } from './constants';
+import { inAppMessaging } from './InAppMessaging';
+import type { StartInAppMessagingOptions } from './InAppMessaging';
+import type { InAppMessage } from './InAppMessaging/models/message';
+import { PURCHASE_EVENT_NAME } from './InAppMessaging/models/trigger';
 
 const package_json = require('../package.json');
 
@@ -72,6 +78,26 @@ export class GameballApp {
         STORAGE_KEYS.CUSTOMER_PREFERRED_LANGUAGE
       ).catch(() => null);
 
+      // In-app messaging shares this configuration; it opens no connection until it is started.
+      inAppMessaging.configure({
+        apiKey: config.apiKey,
+        lang: config.lang,
+        apiBaseUrl: config.apiPrefix,
+        appVersion: this.appVersion(),
+        sessionToken: () => this.sessionToken,
+        debug: config.debug,
+        isHostWidgetOpen: () => GameballWidget.isOpen(),
+      });
+      GameballWidget.onClosed = () => {
+        try {
+          inAppMessaging.onHostWidgetClosed();
+        } catch (error) {
+          if (__DEV__) {
+            console.log('[GameballApp] onHostWidgetClosed hook failed', error);
+          }
+        }
+      };
+
       // Fetch bot settings
       await this.fetchBotSettings();
 
@@ -87,7 +113,6 @@ export class GameballApp {
         console.log('[GameballApp] SDK initialized successfully', {
           version: this.sdkVersion,
           platform: this.os,
-          apiKey: config.apiKey.substring(0, 8) + '...',
         });
       }
     } catch (error) {
@@ -146,6 +171,12 @@ export class GameballApp {
       result = {
         gameballId: response.gameballId || response.id || '',
       };
+
+      // Messaging follows the identified customer; changing customer re-syncs their campaigns.
+      inAppMessaging.identified(
+        request.customerId,
+        request.customerAttributes?.preferredLanguage
+      );
     } catch (error) {
       callback?.onError?.(
         error instanceof Error
@@ -180,6 +211,12 @@ export class GameballApp {
       // Override or clear sessionToken - always update on every call
       this.sessionToken = sessionToken || null;
 
+      // Every event is also a trigger. Evaluated first, so a matching message can display
+      // without waiting for the round trip.
+      for (const [name, properties] of Object.entries(event.events ?? {})) {
+        inAppMessaging.onCustomEvent(name, properties ?? {});
+      }
+
       // Use the event data directly as it now matches the expected structure
       await this.makeRequest(API_ENDPOINTS.EVENTS, event);
     } catch (error) {
@@ -194,6 +231,41 @@ export class GameballApp {
     // Outside the try so an exception thrown by onSuccess isn't also reported to onError
     callback?.onSuccess?.(true);
     return true;
+  }
+
+  /**
+   * Log a purchase. Sends an event named `purchase` through sendEvent(), with the purchase
+   * details as metadata, so purchase-triggered in-app messages can filter on them. Works
+   * whether or not in-app messaging has started.
+   * @param purchase - Who bought what, for how much
+   * @param callback - Optional callback, as for sendEvent()
+   * @param sessionToken - Optional session token for this request, as for sendEvent()
+   * @returns Promise with success status
+   */
+  async logPurchase(
+    purchase: Purchase,
+    callback?: Callback<boolean>,
+    sessionToken?: string | null
+  ): Promise<boolean> {
+    const { customerId, productId, price, currency, properties } = purchase;
+    // In-app messaging hears about it through sendEvent()'s event hook only; notifying it here
+    // as well would show every purchase message twice
+    return this.sendEvent(
+      {
+        customerId,
+        events: {
+          [PURCHASE_EVENT_NAME]: {
+            productId,
+            price,
+            currency,
+            quantity: purchase.quantity ?? 1,
+            ...properties,
+          },
+        },
+      },
+      callback,
+      sessionToken
+    );
   }
 
   /**
@@ -320,6 +392,9 @@ export class GameballApp {
     if (this.config) {
       this.config.lang = language;
     }
+    // In-app messaging keeps its own configuration, so it has to be told: without this it would
+    // go on asking for campaigns in whichever language init() was given, for the life of the app.
+    inAppMessaging.setLanguage(language);
 
     AsyncStorage.getItem(STORAGE_KEYS.CUSTOMER_ID)
       .then((customerId) => {
@@ -369,6 +444,15 @@ export class GameballApp {
       STORAGE_KEYS.CUSTOMER_PREFERRED_LANGUAGE,
       language
     ).catch(() => {});
+  }
+
+  // Lets campaigns target app versions; messaging still works when it can't be read
+  private appVersion(): string {
+    try {
+      return DeviceInfo.getVersion() || '';
+    } catch {
+      return '';
+    }
   }
 
   private ensureInitialized(): void {
@@ -438,6 +522,43 @@ export class GameballApp {
       ...internalRequest,
       customerAttributes: processedCustomerAttributes,
     };
+  }
+
+  /**
+   * Sync campaigns and start showing in-app messages.
+   *
+   * Awaited: this platform's storage is asynchronous, and the frequency history has to be in
+   * memory before the first campaign is judged against it. Mount `<GameballInAppMessages />`
+   * once near the root of the app, or nothing has anywhere to draw.
+   *
+   * Called before init(), it logs and does nothing rather than throwing.
+   */
+  async startInAppMessaging(
+    options: StartInAppMessagingOptions = {}
+  ): Promise<void> {
+    return inAppMessaging.start(options);
+  }
+
+  /**
+   * Stops in-app messaging, dismissing anything on screen, sending pending analytics and clearing
+   * state. Call on logout. Safe to call when it was never started.
+   */
+  stopInAppMessaging(): void {
+    inAppMessaging.stop();
+  }
+
+  get isInAppMessagingStarted(): boolean {
+    return inAppMessaging.isStarted;
+  }
+
+  /** Hold messages while the app's own modal, drawer or checkout step is open. */
+  setOverlayOpen(open: boolean): void {
+    inAppMessaging.setOverlayOpen(open);
+  }
+
+  /** Observe every selected message. Returns an unsubscribe function. */
+  onInAppMessage(listener: (message: InAppMessage) => void): () => void {
+    return inAppMessaging.onMessage(listener);
   }
 
   private async makeRequest(

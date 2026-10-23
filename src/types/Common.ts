@@ -15,6 +15,13 @@ export interface GameballConfig {
   platform?: string;
   sessionToken?: string;
   apiPrefix?: string;
+  /**
+   * Console diagnostics for in-app messaging, prefixed `[GameballIAM]`.
+   *
+   * Defaults to `__DEV__`: on while you are building, silent in the release build your
+   * customers install. Set it to `true` in a release build only to reproduce a problem.
+   */
+  debug?: boolean;
 }
 
 export interface Callback<T> {
@@ -57,6 +64,21 @@ export interface Event {
   customerId: string;
   mobile?: string;
   email?: string;
+}
+
+export interface Purchase {
+  /** Who bought */
+  customerId: string;
+  /** Identifier of the item bought */
+  productId: string;
+  /** Unit price */
+  price: number;
+  /** ISO currency code, e.g. 'USD' */
+  currency: string;
+  /** Number of units. Defaults to 1 */
+  quantity?: number;
+  /** Extra metadata, also available to campaign filters */
+  properties?: Record<string, any>;
 }
 
 export interface ShowProfileRequest {

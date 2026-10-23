@@ -1,7 +1,8 @@
 // Modern React Native API
 import GameballApp from './GameballApp';
 import GameballWidget from './GameballWidget';
-export { GameballApp, GameballWidget };
+import { GameballInAppMessages, inAppMessaging } from './InAppMessaging';
+export { GameballApp, GameballWidget, GameballInAppMessages, inAppMessaging };
 export default GameballApp;
 
 // Types following React Native conventions
@@ -11,6 +12,7 @@ export type {
   CustomerAttributes,
   InitializeCustomerResponse,
   Event,
+  Purchase,
   ShowProfileRequest,
   Callback,
   WidgetEvent,
@@ -19,3 +21,24 @@ export type {
 
 // Enums
 export { PushProvider } from './types/Common';
+
+// In-app messaging
+export type {
+  StartInAppMessagingOptions,
+  GameballInAppMessagesProps,
+  InAppMessage,
+  MessageButton,
+  ClickAction,
+  MessageType,
+  MessageLayout,
+  MessageOrientation,
+  SlidePosition,
+  MessageStyle,
+  ButtonStyle,
+  BeforeDisplay,
+  DisplayDecision,
+  OnAction,
+  TextAlign,
+  PresentedMessage,
+  PresentCallbacks,
+} from './InAppMessaging';
