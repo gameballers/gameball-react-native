@@ -12,6 +12,7 @@ export type {
   CustomerAttributes,
   InitializeCustomerResponse,
   Event,
+  Purchase,
   ShowProfileRequest,
   Callback,
   WidgetEvent,

@@ -9,6 +9,7 @@ import type {
   InitializeCustomerRequest,
   InitializeCustomerResponse,
   Event,
+  Purchase,
   ShowProfileRequest,
   Callback,
   GameballSDKHeadersType,
@@ -17,6 +18,7 @@ import { API_ENDPOINTS, ERROR_MESSAGES, STORAGE_KEYS } from './constants';
 import { inAppMessaging } from './InAppMessaging';
 import type { StartInAppMessagingOptions } from './InAppMessaging';
 import type { InAppMessage } from './InAppMessaging/models/message';
+import { PURCHASE_EVENT_NAME } from './InAppMessaging/models/trigger';
 
 const package_json = require('../package.json');
 
@@ -229,6 +231,41 @@ export class GameballApp {
     // Outside the try so an exception thrown by onSuccess isn't also reported to onError
     callback?.onSuccess?.(true);
     return true;
+  }
+
+  /**
+   * Log a purchase. Sends an event named `purchase` through sendEvent(), with the purchase
+   * details as metadata, so purchase-triggered in-app messages can filter on them. Works
+   * whether or not in-app messaging has started.
+   * @param purchase - Who bought what, for how much
+   * @param callback - Optional callback, as for sendEvent()
+   * @param sessionToken - Optional session token for this request, as for sendEvent()
+   * @returns Promise with success status
+   */
+  async logPurchase(
+    purchase: Purchase,
+    callback?: Callback<boolean>,
+    sessionToken?: string | null
+  ): Promise<boolean> {
+    const { customerId, productId, price, currency, properties } = purchase;
+    // In-app messaging hears about it through sendEvent()'s event hook only; notifying it here
+    // as well would show every purchase message twice
+    return this.sendEvent(
+      {
+        customerId,
+        events: {
+          [PURCHASE_EVENT_NAME]: {
+            productId,
+            price,
+            currency,
+            quantity: purchase.quantity ?? 1,
+            ...properties,
+          },
+        },
+      },
+      callback,
+      sessionToken
+    );
   }
 
   /**
