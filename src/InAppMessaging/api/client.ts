@@ -16,6 +16,8 @@ export interface ApiClientConfig {
   lang: () => string;
   platformCode: () => number;
   appVersion: () => string;
+  /** Read on every request, so a token set by a later call is picked up. */
+  sessionToken?: () => string | null | undefined;
   sdkVersion: string;
   fetchImpl?: typeof fetch;
 }
@@ -25,12 +27,17 @@ export class GameballApiClient {
   constructor(private readonly config: ApiClientConfig) {}
 
   private headers(): Record<string, string> {
-    return {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json; charset=UTF-8',
       'ApiKey': this.config.apiKey(),
       'Lang': this.config.lang(),
       'x-gb-agent': `GB/react-native/${this.config.sdkVersion}`,
     };
+    const sessionToken = this.config.sessionToken?.();
+    if (sessionToken) {
+      headers['X-GB-TOKEN'] = sessionToken;
+    }
+    return headers;
   }
 
   private post(

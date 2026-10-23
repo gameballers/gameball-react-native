@@ -89,6 +89,10 @@ class GameballWidget extends React.Component<Props, State> {
   // Most recently mounted widget, so GameballApp.showProfile/hideProfile can reach it.
   private static activeInstance: GameballWidget | null = null;
 
+  // Called once the widget has finished closing, so in-app messages held back while it was
+  // open can show.
+  static onClosed?: () => void;
+
   private _isMounted: boolean = false;
   private _slideAnim = new Animated.Value(SCREEN_HEIGHT);
   private _webViewRef: any = React.createRef();
@@ -166,6 +170,21 @@ class GameballWidget extends React.Component<Props, State> {
     GameballWidget.activeInstance?.hideProfile();
   }
 
+  /** Whether the mounted widget is on screen. */
+  static isOpen(): boolean {
+    return GameballWidget.activeInstance?.state.visible ?? false;
+  }
+
+  private static notifyClosed() {
+    try {
+      GameballWidget.onClosed?.();
+    } catch (error) {
+      if (__DEV__) {
+        console.log('[GameballWidget] close listener failed', error);
+      }
+    }
+  }
+
   componentDidMount() {
     this._isMounted = true;
     GameballWidget.activeInstance = this;
@@ -185,6 +204,10 @@ class GameballWidget extends React.Component<Props, State> {
     this._isMounted = false;
     if (GameballWidget.activeInstance === this) {
       GameballWidget.activeInstance = null;
+      // Unmounted while open: the screen is free again all the same
+      if (this.state.visible) {
+        GameballWidget.notifyClosed();
+      }
     }
   }
 
@@ -373,7 +396,7 @@ class GameballWidget extends React.Component<Props, State> {
       useNativeDriver: true,
     }).start(() => {
       if (this._isMounted) {
-        this.setState({ visible: false });
+        this.setState({ visible: false }, () => GameballWidget.notifyClosed());
       }
     });
   }

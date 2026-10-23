@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DeviceInfo from 'react-native-device-info';
 import GameballWidget from './GameballWidget';
 import GameballLogger from './GameballLogger';
 import { LanguageUtils } from './GameballWidget/languageUtils';
@@ -80,8 +81,20 @@ export class GameballApp {
         apiKey: config.apiKey,
         lang: config.lang,
         apiBaseUrl: config.apiPrefix,
+        appVersion: this.appVersion(),
+        sessionToken: () => this.sessionToken,
         debug: config.debug,
+        isHostWidgetOpen: () => GameballWidget.isOpen(),
       });
+      GameballWidget.onClosed = () => {
+        try {
+          inAppMessaging.onHostWidgetClosed();
+        } catch (error) {
+          if (__DEV__) {
+            console.log('[GameballApp] onHostWidgetClosed hook failed', error);
+          }
+        }
+      };
 
       // Fetch bot settings
       await this.fetchBotSettings();
@@ -98,7 +111,6 @@ export class GameballApp {
         console.log('[GameballApp] SDK initialized successfully', {
           version: this.sdkVersion,
           platform: this.os,
-          apiKey: config.apiKey.substring(0, 8) + '...',
         });
       }
     } catch (error) {
@@ -397,6 +409,15 @@ export class GameballApp {
     ).catch(() => {});
   }
 
+  // Lets campaigns target app versions; messaging still works when it can't be read
+  private appVersion(): string {
+    try {
+      return DeviceInfo.getVersion() || '';
+    } catch {
+      return '';
+    }
+  }
+
   private ensureInitialized(): void {
     if (!this.isInitialized) {
       throw new Error(ERROR_MESSAGES.NOT_INITIALIZED);
@@ -472,11 +493,12 @@ export class GameballApp {
    * Awaited: this platform's storage is asynchronous, and the frequency history has to be in
    * memory before the first campaign is judged against it. Mount `<GameballInAppMessages />`
    * once near the root of the app, or nothing has anywhere to draw.
+   *
+   * Called before init(), it logs and does nothing rather than throwing.
    */
   async startInAppMessaging(
     options: StartInAppMessagingOptions = {}
   ): Promise<void> {
-    this.ensureInitialized();
     return inAppMessaging.start(options);
   }
 
