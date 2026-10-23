@@ -1,6 +1,6 @@
 {
   "name": "react-native-gameball",
-  "version": "3.3.1",
+  "version": "4.0.0",
   "description": "Gameball for React Native: the profile widget and in-app messaging",
   "main": "lib/commonjs/index",
   "module": "lib/module/index",
