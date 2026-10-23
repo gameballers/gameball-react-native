@@ -12,12 +12,9 @@ import type {
   Callback,
   GameballSDKHeadersType,
 } from './types/Common';
-import { API_ENDPOINTS, ERROR_MESSAGES } from './constants';
+import { API_ENDPOINTS, ERROR_MESSAGES, STORAGE_KEYS } from './constants';
 
 const package_json = require('../package.json');
-
-const CUSTOMER_ID_KEY = 'gameball_customer_id';
-const CUSTOMER_PREFERRED_LANGUAGE_KEY = 'gameball_customer_preferred_language';
 
 /**
  * Primary Gameball SDK entry point providing comprehensive functionality
@@ -72,7 +69,7 @@ export class GameballApp {
 
       // Restore the customer preferred language saved before a relaunch
       this.customerPreferredLanguage = await AsyncStorage.getItem(
-        CUSTOMER_PREFERRED_LANGUAGE_KEY
+        STORAGE_KEYS.CUSTOMER_PREFERRED_LANGUAGE
       ).catch(() => null);
 
       // Fetch bot settings
@@ -125,7 +122,9 @@ export class GameballApp {
       // Validate the request - any validation errors will be caught and trigger callback
       this.validateCustomerRequest(request);
 
-      AsyncStorage.setItem(CUSTOMER_ID_KEY, request.customerId).catch(() => {});
+      AsyncStorage.setItem(STORAGE_KEYS.CUSTOMER_ID, request.customerId).catch(
+        () => {}
+      );
 
       // Store customer preferred language for widget display
       const preferredLanguage = request.customerAttributes?.preferredLanguage;
@@ -322,7 +321,7 @@ export class GameballApp {
       this.config.lang = language;
     }
 
-    AsyncStorage.getItem(CUSTOMER_ID_KEY)
+    AsyncStorage.getItem(STORAGE_KEYS.CUSTOMER_ID)
       .then((customerId) => {
         if (!this.isInitialized || !customerId) return;
         // Pass the current session token: initializeCustomer replaces the stored one
@@ -366,9 +365,10 @@ export class GameballApp {
   // Private helper methods
   private setCustomerPreferredLanguage(language: string): void {
     this.customerPreferredLanguage = language;
-    AsyncStorage.setItem(CUSTOMER_PREFERRED_LANGUAGE_KEY, language).catch(
-      () => {}
-    );
+    AsyncStorage.setItem(
+      STORAGE_KEYS.CUSTOMER_PREFERRED_LANGUAGE,
+      language
+    ).catch(() => {});
   }
 
   private ensureInitialized(): void {

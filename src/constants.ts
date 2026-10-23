@@ -37,6 +37,13 @@ export const WEBVIEW_CONFIG = {
   ],
 } as const;
 
+// Local storage keys
+export const STORAGE_KEYS = {
+  INSTALL_ID: 'gameball_install_id',
+  CUSTOMER_ID: 'gameball_customer_id',
+  CUSTOMER_PREFERRED_LANGUAGE: 'gameball_customer_preferred_language',
+} as const;
+
 // Default Values
 export const DEFAULTS = {
   LANGUAGE: 'en',

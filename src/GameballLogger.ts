@@ -1,9 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
-import { API_ENDPOINTS } from './constants';
-
-const INSTALL_ID_KEY = 'gameball_install_id';
+import { API_ENDPOINTS, STORAGE_KEYS } from './constants';
 
 interface LoggerConfig {
   apiKey: string;
@@ -83,10 +81,10 @@ class GameballLogger {
   /** Returns the persisted per-install UUID, generating one on first access. */
   private async getInstallId(): Promise<string | null> {
     try {
-      let id = await AsyncStorage.getItem(INSTALL_ID_KEY);
+      let id = await AsyncStorage.getItem(STORAGE_KEYS.INSTALL_ID);
       if (!id) {
         id = this.uuidV4();
-        await AsyncStorage.setItem(INSTALL_ID_KEY, id);
+        await AsyncStorage.setItem(STORAGE_KEYS.INSTALL_ID, id);
       }
       return id;
     } catch {
