@@ -18,8 +18,12 @@
     "escape-string-regexp": "^4.0.0",
     "react": "19.2.3",
     "react-native": "0.87.1",
+    "react-native-device-info": "^15.0.2",
     "react-native-gameball": "file:../..",
-    "react-native-safe-area-context": "^5.9.1"
+    "react-native-modal": "^13.0.1",
+    "react-native-push-notification-popup": "^1.7.0",
+    "react-native-safe-area-context": "^5.9.1",
+    "react-native-webview": "^14.0.1"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
