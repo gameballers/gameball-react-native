@@ -66,6 +66,21 @@ export interface Event {
   email?: string;
 }
 
+export interface Purchase {
+  /** Who bought */
+  customerId: string;
+  /** Identifier of the item bought */
+  productId: string;
+  /** Unit price */
+  price: number;
+  /** ISO currency code, e.g. 'USD' */
+  currency: string;
+  /** Number of units. Defaults to 1 */
+  quantity?: number;
+  /** Extra metadata, also available to campaign filters */
+  properties?: Record<string, any>;
+}
+
 export interface ShowProfileRequest {
   /** Optional customer identifier. When not provided, opens the guest view */
   customerId?: string;
