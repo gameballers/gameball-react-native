@@ -94,4 +94,39 @@ describe('game campaigns', () => {
       gameCampaignType: 'wheel',
     });
   });
+
+  describe('frequency, read exactly as for a message', () => {
+    const withTrigger = (trigger: string) =>
+      campaigns(
+        WHEEL.replace(
+          '"trigger": { "type": "session_start", "repeatable": true }',
+          `"trigger": ${trigger}`
+        )
+      )[0]!;
+
+    it('is once ever when it is not repeatable', () => {
+      const game = withTrigger(
+        '{ "type": "session_start", "repeatable": false, "minIntervalSeconds": null }'
+      );
+      expect(game.repeatable).toBe(false);
+      expect(game.minIntervalMs).toBeNull();
+    });
+
+    it('waits out its own minimum interval when it has one', () => {
+      const game = withTrigger(
+        '{ "type": "session_start", "repeatable": true, "minIntervalSeconds": 600 }'
+      );
+      expect(game.repeatable).toBe(true);
+      expect(game.minIntervalMs).toBe(600_000);
+    });
+
+    it('gets no interval of its own when the sync sends none, as games do today', () => {
+      // No game-specific default: the account cooldown is the only gap left to apply.
+      const game = withTrigger(
+        '{ "type": "session_start", "repeatable": true, "minIntervalSeconds": null }'
+      );
+      expect(game.repeatable).toBe(true);
+      expect(game.minIntervalMs).toBeNull();
+    });
+  });
 });

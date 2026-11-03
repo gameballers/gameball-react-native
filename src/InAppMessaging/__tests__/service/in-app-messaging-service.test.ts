@@ -6,7 +6,7 @@ import type { PropertyFilter } from '../../models/property-filter';
 import type { SyncResult } from '../../source/sync-result';
 import { ImageArtworkPrefetcher } from '../../presentation/artwork-prefetcher';
 import type { Artwork, ArtworkPrefetcher } from '../../presentation/presenter';
-import { campaign, message, T0 } from '../helpers/fixtures';
+import { campaign, game, message, T0 } from '../helpers/fixtures';
 import {
   FakeCache,
   FakePrefetcher,
@@ -722,6 +722,107 @@ describe('InAppMessagingService', () => {
       h.service.onAppResumed();
       await jest.advanceTimersByTimeAsync(0);
       expect(h.source.fetches).toBe(2);
+    });
+  });
+
+  describe('games', () => {
+    /** What opened, in order: a game by its own id, a message by its id. */
+    const opened = (h: ReturnType<typeof harness>) =>
+      h.presenter.presented.map(
+        (p) => p.message.widget?.gameCampaignId ?? p.message.id
+      );
+
+    /** The customer sees the game through and closes it. */
+    const playThrough = (h: ReturnType<typeof harness>) => {
+      h.presenter.paint();
+      h.presenter.dismiss();
+    };
+
+    describe('follow the message frequency rules', () => {
+      it('a game that is not repeatable opens once ever', async () => {
+        const h = harness(
+          sync([game(9645, { trigger: eventTrigger('spin') })])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
+
+      it('a repeatable game waits out its own minimum interval, then opens again', async () => {
+        const h = harness(
+          sync([
+            game(9645, {
+              trigger: eventTrigger('spin'),
+              repeatable: true,
+              minIntervalMs: 600_000,
+            }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        h.advance(600_000 - 31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('a repeatable game with no interval of its own waits for the account cooldown and nothing else', async () => {
+        const h = harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin'), repeatable: true }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(29_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        h.advance(1_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('one account cooldown spans messages and games alike', async () => {
+        const h = harness(
+          sync([campaign(1), game(9645, { trigger: eventTrigger('spin') })])
+        );
+        await h.service.start({ customerId: 'c1' });
+        playThrough(h);
+
+        h.advance(5_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual(['1']);
+
+        h.advance(25_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual(['1', 9645]);
+      });
+
+      it('quiet hours hold a game back as they do a message', async () => {
+        const minute = new Date(T0).getHours() * 60 + new Date(T0).getMinutes();
+        const h = harness(
+          sync([game(9645)], {
+            quietHours: {
+              startMinute: minute,
+              endMinute: (minute + 120) % 1440,
+            },
+          })
+        );
+        await h.service.start({ customerId: 'c1' });
+        expect(opened(h)).toEqual([]);
+      });
     });
   });
 });
