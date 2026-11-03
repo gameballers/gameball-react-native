@@ -85,6 +85,7 @@ export class GameballApp {
         apiBaseUrl: config.apiPrefix,
         appVersion: this.appVersion(),
         sessionToken: () => this.sessionToken,
+        widgetUrlPrefix: config.widgetUrlPrefix,
         debug: config.debug,
         isHostWidgetOpen: () => GameballWidget.isOpen(),
       });
@@ -344,7 +345,13 @@ export class GameballApp {
       shop: this.config?.shop,
       platform: this.config?.platform,
       sessionToken: this.sessionToken || undefined,
-      widgetUrlPrefix: request.widgetUrlPrefix || API_ENDPOINTS.WIDGET_BASE_URL,
+      // Per call, then the SDK's configuration, then production. The per-call value stays an
+      // override rather than the only way to set this, so a host aimed at a non-production
+      // environment cannot get it for this widget and production for a game a message opens.
+      widgetUrlPrefix:
+        request.widgetUrlPrefix ||
+        this.config?.widgetUrlPrefix ||
+        API_ENDPOINTS.WIDGET_BASE_URL,
       customerId: request.customerId,
       openDetail: request.openDetail,
       hideNavigation: request.hideNavigation,

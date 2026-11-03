@@ -29,6 +29,8 @@ export interface InAppMessagingConfig {
   debug?: boolean;
   /** The SDK's current session token, sent with every in-app messaging request when set. */
   sessionToken?: () => string | null | undefined;
+  /** The widget host a game campaign loads from. Production when absent. */
+  widgetUrlPrefix?: string;
   /** Whether the Gameball profile widget is on screen. Messages wait while it is. */
   isHostWidgetOpen?: () => boolean;
 }
