@@ -1,7 +1,9 @@
+import React from 'react';
+import TestRenderer, { act } from 'react-test-renderer';
 import GameballApp from '../GameballApp';
 import GameballWidget from '../GameballWidget';
 import { API_ENDPOINTS } from '../constants';
-import { inAppMessaging } from '../InAppMessaging';
+import { GameballInAppMessages, inAppMessaging } from '../InAppMessaging';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
@@ -93,5 +95,101 @@ describe('the widget host', () => {
       (inAppMessaging as unknown as { config: { widgetUrlPrefix?: string } })
         .config.widgetUrlPrefix
     ).toBe(ALPHA_WIDGET);
+  });
+});
+
+describe('a game campaign', () => {
+  /** A wheel the merchant set to open at session start, as the sync returns it. */
+  const GAME_SYNC = JSON.stringify({
+    cooldownSeconds: 30,
+    quietHours: null,
+    campaignOrdering: null,
+    messages: [
+      {
+        campaignType: 2,
+        campaignId: 0,
+        variationId: 0,
+        dispatchId: null,
+        name: 'Spin the Wheel',
+        priority: 0,
+        messageType: 2,
+        trigger: {
+          type: 'session_start',
+          repeatable: true,
+          minIntervalSeconds: null,
+        },
+        content: null,
+        locale: null,
+        localeCode: null,
+        expiresAt: null,
+        isTest: false,
+        gameCampaignId: 9645,
+        gameCampaignType: 'wheel',
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    // The profile widget as an app that never opened it leaves it: nothing set.
+    Object.assign(GameballWidget, {
+      apiKey: '',
+      customerId: null,
+      sessionToken: '',
+      lang: '',
+      widgetUrlPrefix: '',
+    });
+  });
+
+  /** Signs a customer in, starts messaging with the host mounted, and reads the game's url. */
+  async function openGame(beforeStart?: () => Promise<void>): Promise<string> {
+    serve({ '/inapp-messages/sync': GAME_SYNC });
+    await app().init({
+      apiKey: 'k',
+      lang: 'en',
+      apiPrefix: 'https://api.test',
+      widgetUrlPrefix: ALPHA_WIDGET,
+      debug: false,
+    });
+    await app().initializeCustomer({ customerId: 'c1' }, undefined, 'tok');
+    await beforeStart?.();
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    act(() => {
+      tree = TestRenderer.create(<GameballInAppMessages />);
+    });
+    await act(async () => {
+      await app().startInAppMessaging();
+    });
+    const webViews = tree.root.findAll(
+      (n) => typeof n.type === 'string' && n.props.testID === 'gb-webview'
+    );
+    const url = webViews[0]?.props.source?.uri as string | undefined;
+    act(() => {
+      tree.unmount();
+    });
+    if (!url) {
+      throw new Error('no game was opened');
+    }
+    return url;
+  }
+
+  it('opens without showProfile ever having been called', async () => {
+    const url = await openGame();
+
+    expect(url.startsWith(`${ALPHA_WIDGET}?`)).toBe(true);
+    expect(url).toContain('apiKey=k');
+    expect(url).toContain('customerId=c1');
+    expect(url).toContain('lang=en');
+    expect(url).toContain('sessionToken=tok');
+    expect(url).toContain('openDetail=details_wheel_9645');
+  });
+
+  it('opens for the customer messaging runs for, not the one the profile widget last showed', async () => {
+    const url = await openGame(async () => {
+      await app().showProfile({ customerId: 'someone-else' });
+    });
+
+    expect(url).toContain('customerId=c1');
+    expect(url).not.toContain('someone-else');
   });
 });

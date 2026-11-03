@@ -3,10 +3,11 @@ import { BatchedMessageAnalytics } from './analytics/analytics';
 import { GameballApiClient, DEFAULT_API_BASE_URL } from './api/client';
 import { StoredFrequencyCap } from './evaluation/frequency-cap';
 import { iamLog, setLogEnabled } from './log';
-import type { InAppMessage } from './models/message';
+import type { InAppMessage, WidgetContent } from './models/message';
 import { CachingVariableSource } from './personalisation/variable-source';
 import { ImageArtworkPrefetcher } from './presentation/artwork-prefetcher';
 import { ReactMessagePresenter } from './presentation/message-presenter';
+import { inAppWidgetUrl } from './presentation/widget-url';
 import {
   InAppMessagingService,
   type BeforeDisplay,
@@ -80,6 +81,7 @@ export class InAppMessagingController {
       return width > height ? 'landscape' : 'portrait';
     },
     artwork: (url) => this.artwork.artworkFor(url),
+    gameUrl: (widget) => this.gameUrl(widget),
   });
 
   private config: InAppMessagingConfig | null = null;
@@ -348,6 +350,31 @@ export class InAppMessagingController {
     } catch (error) {
       iamLog(`onCustomEvent hook failed (${String(error)})`);
     }
+  }
+
+  /**
+   * The url a game opens at, from messaging's own configuration and the customer it runs for.
+   *
+   * Never from the profile widget's state, which only `showProfile` sets: an app that never
+   * opened the profile would have no api key to open a game with, and one that had would open it
+   * for whichever customer the profile last showed.
+   */
+  private gameUrl(widget: WidgetContent): string | null {
+    const config = this.config;
+    const customerId = this.customerId;
+    if (!config || !customerId) {
+      iamLog(
+        'cannot open a game campaign: messaging has no customer to open it for'
+      );
+      return null;
+    }
+    return inAppWidgetUrl(widget, {
+      apiKey: config.apiKey,
+      customerId,
+      lang: this.language(),
+      widgetUrlPrefix: config.widgetUrlPrefix,
+      sessionToken: config.sessionToken?.() ?? null,
+    });
   }
 
   private language(): string {

@@ -1,5 +1,5 @@
 import { iamLog } from '../log';
-import type { InAppMessage } from '../models/message';
+import type { InAppMessage, WidgetContent } from '../models/message';
 import type {
   Artwork,
   MessageArtwork,
@@ -20,6 +20,11 @@ export interface PresentedMessage {
   message: InAppMessage;
   /** The images the message draws, already in memory. The view never fetches its own. */
   artwork: MessageArtwork;
+  /**
+   * The url of the game this message opens, composed once as it was presented. null for every
+   * ordinary message; never null for a game, which is refused rather than drawn without one.
+   */
+  gameUrl: string | null;
   /** Called by the view on its first painted frame. The impression is counted here. */
   onShown(): void;
   callbacks: PresentCallbacks;
@@ -44,6 +49,8 @@ export interface ReactMessagePresenterOptions {
   orientation?: () => 'portrait' | 'landscape' | undefined;
   /** The artwork held for a url, or null when it is not held. */
   artwork?: (url: string) => Artwork | null;
+  /** The url a game opens at, or null when it cannot be composed. Without it no game opens. */
+  gameUrl?: (widget: WidgetContent) => string | null;
 }
 
 export class ReactMessagePresenter implements MessagePresenter {
@@ -59,10 +66,12 @@ export class ReactMessagePresenter implements MessagePresenter {
     | (() => 'portrait' | 'landscape' | undefined)
     | null;
   private readonly artwork: (url: string) => Artwork | null;
+  private readonly gameUrl: (widget: WidgetContent) => string | null;
 
   constructor(options: ReactMessagePresenterOptions = {}) {
     this.orientation = options.orientation ?? null;
     this.artwork = options.artwork ?? (() => null);
+    this.gameUrl = options.gameUrl ?? (() => null);
   }
 
   /**
@@ -184,11 +193,20 @@ export class ReactMessagePresenter implements MessagePresenter {
       );
       return false;
     }
+    // Composed here, once per presentation, rather than by the view on every render.
+    const gameUrl = message.widget ? this.gameUrl(message.widget) : null;
+    if (message.widget && gameUrl === null) {
+      iamLog(
+        `game ${message.widget.gameCampaignId} has no url to open at; not drawing an empty card`
+      );
+      return false;
+    }
     this.shown = false;
     const entry: PresentedMessage = {
       key: ++this.presentations,
       message,
       artwork,
+      gameUrl,
       callbacks,
       onShown: () => {
         // The view reports every layout pass; only the first one is an impression.

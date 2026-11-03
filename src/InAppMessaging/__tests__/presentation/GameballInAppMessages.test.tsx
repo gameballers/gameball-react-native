@@ -6,7 +6,6 @@ import { ReactMessagePresenter } from '../../presentation/message-presenter';
 import { ARTWORK_PAINT_TIMEOUT_MS } from '../../presentation/views/reveal';
 import type { InAppMessage } from '../../models/message';
 import { message } from '../helpers/fixtures';
-import GameballWidget from '../../../GameballWidget';
 
 function messageOf(overrides: Partial<InAppMessage> = {}): InAppMessage {
   return {
@@ -454,14 +453,17 @@ describe('games', () => {
     return false;
   }
 
-  const apiKey = GameballWidget.apiKey;
-  beforeEach(() => {
-    // A game's url carries the api key, as it does in an app; without one it is never opened.
-    GameballWidget.apiKey = 'test-key';
-  });
-  afterEach(() => {
-    GameballWidget.apiKey = apiKey;
-  });
+  /** What the controller composes from messaging's own configuration as a game is presented. */
+  const GAME_URL =
+    'https://m.gameball.app?customerId=c1&apiKey=k&openDetail=details_wheel_7&hideNavigation=true';
+
+  /** A presenter as the controller builds it: no artwork to hold, and a url for every game. */
+  function gamePresenter(): ReactMessagePresenter {
+    return new ReactMessagePresenter({
+      artwork: () => null,
+      gameUrl: () => GAME_URL,
+    });
+  }
 
   /** The layer a game draws in: the SDK's own, over the app, rather than a Modal. */
   function layer(tree: TestRenderer.ReactTestRenderer) {
@@ -471,7 +473,7 @@ describe('games', () => {
   }
 
   it('loads a game without taking the screen, and takes it only once the game has drawn', () => {
-    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const presenter = gamePresenter();
     const Host = createGameballInAppMessages(presenter);
     const tree = mount(<Host />);
     const calls = recorder();
@@ -491,6 +493,24 @@ describe('games', () => {
     expect(stage(tree)).toEqual(REVEALED);
     // Drawn over the app now: VoiceOver keeps to the game, as it would inside a Modal.
     expect(layer(tree).props.accessibilityViewIsModal).toBe(true);
+    unmount(tree);
+  });
+
+  it('loads the game at the url it was presented with, needing nothing from the profile widget', () => {
+    // The url used to be read off the profile widget's statics, which only showProfile sets: in
+    // an app that never opened the profile, every game was dropped for want of an api key.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+
+    act(() => {
+      presenter.present(game('g'), recorder());
+    });
+
+    const web = tree.root.find(
+      (n) => typeof n.type === 'string' && n.props.testID === 'gb-webview'
+    );
+    expect(web.props.source).toEqual({ uri: GAME_URL });
     unmount(tree);
   });
 
@@ -519,7 +539,7 @@ describe('games', () => {
             true
         );
 
-    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const presenter = gamePresenter();
     const Host = createGameballInAppMessages(presenter);
     const tree = mount(<Host />);
     const calls = recorder();
@@ -549,7 +569,7 @@ describe('games', () => {
   });
 
   it('draws a game presented the moment the last one closed in a view of its own', () => {
-    const presenter = new ReactMessagePresenter({ artwork: () => null });
+    const presenter = gamePresenter();
     const Host = createGameballInAppMessages(presenter);
     const tree = mount(<Host />);
     const next = recorder();

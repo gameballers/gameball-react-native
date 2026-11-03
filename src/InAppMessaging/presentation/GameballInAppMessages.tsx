@@ -10,7 +10,6 @@ import { SlideupView } from './views/SlideupView';
 import { ModalView } from './views/ModalView';
 import { FullscreenView } from './views/FullscreenView';
 import { WidgetView } from './views/WidgetView';
-import { inAppWidgetUrl } from './widget-url';
 
 export interface GameballInAppMessagesProps {
   /**
@@ -89,10 +88,10 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
     // A reward campaign is its own composition, before the type branches: it has no artwork, and
     // its content arrives over the network at display time.
     if (message.widget) {
-      const url = inAppWidgetUrl(message.widget);
+      // Composed by the presenter as the game was presented, which refuses a game it has no url
+      // for: there is always one here.
+      const url = current.gameUrl;
       if (url === null) {
-        // Nothing to open; take it away rather than draw an empty card.
-        dismiss();
         return null;
       }
       const { key, onShown } = current;
