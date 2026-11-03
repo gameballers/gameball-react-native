@@ -405,21 +405,9 @@ function parseGameContent(
     return null;
   }
 
-  return {
-    gameCampaignId,
-    gameCampaignType,
-    // Not on the entry today; the backend still carries these on the challenge. Read leniently so
-    // the day they move here costs no parser change.
-    delayMs: parseGameDelay(json.delay),
-    dismissLimit: asInt(json.dismissLimit),
-  };
-}
-
-/** Seconds to wait after the trigger, bounded to the 0-60 the dashboard accepts. */
-function parseGameDelay(value: unknown): number | null {
-  const seconds = asInt(value);
-  if (seconds === null || seconds <= 0) return null;
-  return Math.min(seconds, 60) * 1000;
+  // No delay and no dismissal limit: a game opens when its trigger fires, and how often it may open
+  // is the message frequency rules' business, not a counter of its own.
+  return { gameCampaignId, gameCampaignType };
 }
 
 function resolveLayout(

@@ -22,8 +22,6 @@ describe('game campaigns', () => {
     expect(parsed[0]!.message.widget).toEqual({
       gameCampaignId: 9645,
       gameCampaignType: 'wheel',
-      delayMs: null,
-      dismissLimit: null,
     });
   });
 
@@ -84,8 +82,16 @@ describe('game campaigns', () => {
     expect(parsed[0]!.message.widget).toBeNull();
   });
 
-  it('bounds the delay to what the dashboard accepts', () => {
-    const slow = WHEEL.replace('"isTest": false,', '"isTest": false, "delay": 900,');
-    expect(campaigns(slow)[0]!.message.widget!.delayMs).toBe(60_000);
+  it('opens on its trigger, with no delay and no dismissal limit, whatever the entry carries', () => {
+    // Both were product decisions: a game opens when its trigger fires, and follows the message
+    // frequency rules rather than a give-up counter of its own.
+    const withExtras = WHEEL.replace(
+      '"isTest": false,',
+      '"isTest": false, "delay": 30, "dismissLimit": 3,'
+    );
+    expect(campaigns(withExtras)[0]!.message.widget).toEqual({
+      gameCampaignId: 9645,
+      gameCampaignType: 'wheel',
+    });
   });
 });

@@ -425,8 +425,6 @@ describe('games', () => {
       widget: {
         gameCampaignId: 7,
         gameCampaignType: 'wheel',
-        delayMs: null,
-        dismissLimit: null,
       },
     });
   }

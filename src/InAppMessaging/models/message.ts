@@ -53,11 +53,6 @@ export interface WidgetContent {
   gameCampaignId: number;
   /** Which game it is, as the open-details text: `wheel`, `quiz`, `scratch`… */
   gameCampaignType: string;
-  /** Seconds to wait after the trigger fires. null = open immediately. Not on the sync entry
-   * today; read when it appears so this needs no change on the day it does. */
-  delayMs: number | null;
-  /** Stop offering after this many dismissals without a play. null = no cap. */
-  dismissLimit: number | null;
 }
 
 /** What the host widget is asked to open. */
