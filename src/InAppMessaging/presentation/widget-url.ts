@@ -65,7 +65,21 @@ export function inAppWidgetUrl(
   const url = `${base}?${params.join('&')}`;
   // Logged because it is otherwise invisible: a campaign that opens on "this campaign is not
   // available" looks identical whether the id is wrong, the customer cannot play it, or the host
-  // is pointed at a different widget environment than its api key belongs to.
-  iamLog(`opening widget ${url}`);
+  // is pointed at a different widget environment than its api key belongs to. The credentials are
+  // not part of that diagnosis, and a log is read by people and tools that must never hold them.
+  iamLog(`opening widget ${redactedWidgetUrl(url)}`);
   return url;
+}
+
+/** Credentials a widget url carries, which never reach a log. */
+const SECRET_PARAMS = /([?&](?:apiKey|sessionToken)=)[^&#]*/g;
+
+/**
+ * The url with its credentials replaced, for the log.
+ *
+ * The parameter names stay, so a missing token can still be told from a hidden one. Values are
+ * matched up to the next `&` or `#`, which `encodeURIComponent` always escapes inside a value.
+ */
+export function redactedWidgetUrl(url: string): string {
+  return url.replace(SECRET_PARAMS, '$1<redacted>');
 }
