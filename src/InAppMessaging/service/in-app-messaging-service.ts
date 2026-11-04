@@ -503,7 +503,10 @@ export class InAppMessagingService {
     const notReady: Campaign[] = [];
     for (const c of this.campaigns) {
       const heldBack = this.gameHeldBack(c);
-      if (!this.artworkReady.has(campaignKeyOf(c))) {
+      // A game has no artwork to wait for. The ready set is only filled once the whole sync's
+      // warm-up has finished, so without this a trigger in the seconds after a sync passed every
+      // game over as "not ready" and lost it.
+      if (!c.message.widget && !this.artworkReady.has(campaignKeyOf(c))) {
         notReady.push(c);
         iamLog(`${describeCampaign(c)} passed over: artwork not ready`);
       } else if (heldBack !== null) {

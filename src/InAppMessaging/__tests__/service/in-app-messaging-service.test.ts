@@ -771,6 +771,56 @@ describe('InAppMessagingService', () => {
       h.presenter.dismiss();
     };
 
+    describe('message artwork still warming up', () => {
+      // Found on a device: an event a few seconds after a sync passed every game over as "artwork
+      // not ready" while the sync's message images loaded, and the trigger was lost.
+      const slowArtwork = () => {
+        let release: (ready: boolean) => void = () => {};
+        const gate = new Promise<boolean>((resolve) => (release = resolve));
+        const prefetcher: ArtworkPrefetcher = {
+          prefetch: (m) => (m.widget ? Promise.resolve(true) : gate),
+          retainOnly: () => {},
+        };
+        return { prefetcher, release: () => release(true) };
+      };
+      // Lets the sync land without reaching the warm-up's own 5 s bound.
+      const flush = () => jest.advanceTimersByTimeAsync(0);
+
+      it('an event opens its game before the warm-up has finished', async () => {
+        const artwork = slowArtwork();
+        const h = harness(
+          sync([
+            campaign(1, { trigger: eventTrigger('view') }),
+            game(9645, { trigger: eventTrigger('spin') }),
+          ]),
+          { artwork: artwork.prefetcher }
+        );
+        const started = h.service.start({ customerId: 'c1' });
+        await flush();
+
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        artwork.release();
+        await started;
+      });
+
+      it('a message still waits for its artwork', async () => {
+        const artwork = slowArtwork();
+        const h = harness(sync([campaign(1, { trigger: eventTrigger('view') })]), {
+          artwork: artwork.prefetcher,
+        });
+        const started = h.service.start({ customerId: 'c1' });
+        await flush();
+
+        h.service.onCustomEvent('view');
+        expect(opened(h)).toEqual([]);
+
+        artwork.release();
+        await started;
+      });
+    });
+
     describe('follow the message frequency rules', () => {
       it('a game that is not repeatable opens once ever', async () => {
         const h = harness(
