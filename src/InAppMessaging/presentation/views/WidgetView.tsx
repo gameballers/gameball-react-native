@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { iamLog } from '../../log';
 import type { InAppMessage } from '../../models/message';
+import { FullscreenMetrics, MessageMetrics, ModalMetrics } from '../metrics';
 import { Stage } from './reveal';
+import { CloseGlyph, closeInlineEnd } from './shared';
 import { READINESS_SCRIPT } from './widget-readiness';
 
 /**
@@ -138,42 +140,84 @@ export function WidgetView({
 
   const fullscreen = message.type === 'fullscreen';
 
+  const webView = (
+    <WebView
+      source={{ uri: url }}
+      onMessage={onMessage}
+      injectedJavaScript={READINESS_SCRIPT}
+      scrollEnabled={false}
+      androidHardwareAccelerationDisabled={false}
+      style={styles.web}
+      onError={() => settle(false)}
+    />
+  );
+
+  // The widget's page draws no way out of a game on mobile, so the SDK draws one: at the top end,
+  // over the game — on the card for a modal, and for a full screen clear of the notch by the top
+  // inset. It closes the game as Android's back button does, and so reports nothing either.
+  const inset = fullscreen
+    ? FullscreenMetrics.closeInset
+    : ModalMetrics.closeInset;
+  const close = (
+    <CloseGlyph
+      accessibilityLabel="Close"
+      color={MessageMetrics.gameCloseGlyph}
+      disc={MessageMetrics.gameCloseDisc}
+      onPress={onDismiss}
+      style={{
+        top: (fullscreen ? topInset : 0) + inset,
+        ...closeInlineEnd(inset),
+      }}
+    />
+  );
+
   return (
     // Held out of sight, untouchable and unheard until drawn, rather than unmounted: the WebView
     // has to be laid out at its real size while it loads, or the page computes its layout against
     // nothing. The scrim waits with it — a game loads in the SDK's own layer, not a Modal, so for
     // the seconds that takes the app keeps its taps, with nothing on screen to explain otherwise.
     <Stage revealed={ready}>
-      <View
-        style={[
-          StyleSheet.absoluteFill,
-          fullscreen
-            ? {
-                backgroundColor: message.style.backgroundColor ?? '#FFFFFF',
-                paddingTop: topInset,
-                paddingBottom: bottomInset,
-              }
-            : styles.scrim,
-        ]}
-      >
-        <View style={fullscreen ? styles.fullBleed : styles.card}>
-          <WebView
-            source={{ uri: url }}
-            onMessage={onMessage}
-            injectedJavaScript={READINESS_SCRIPT}
-            scrollEnabled={false}
-            androidHardwareAccelerationDisabled={false}
-            style={styles.web}
-            onError={() => settle(false)}
-          />
+      {fullscreen ? (
+        <View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: message.style.backgroundColor ?? '#FFFFFF' },
+          ]}
+        >
+          <View
+            style={[
+              styles.fullBleed,
+              { paddingTop: topInset, paddingBottom: bottomInset },
+            ]}
+          >
+            {webView}
+          </View>
+          {close}
         </View>
-      </View>
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.centre]}>
+          {/* A tap on the dimmed app around a modal game closes it, as it does a modal message.
+              Not announced: the close button is the way out a screen reader finds. */}
+          <Pressable
+            testID="gb-iam-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            style={[StyleSheet.absoluteFill, styles.scrim]}
+            onPress={onDismiss}
+          />
+          <View testID="gb-iam-game-card" style={styles.card}>
+            {webView}
+            {close}
+          </View>
+        </View>
+      )}
     </Stage>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: { backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center' },
+  centre: { justifyContent: 'center' },
+  scrim: { backgroundColor: 'rgba(0,0,0,0.6)' },
   fullBleed: { flex: 1 },
   card: {
     alignSelf: 'center',

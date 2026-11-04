@@ -416,10 +416,13 @@ function stage(tree: TestRenderer.ReactTestRenderer): typeof HIDDEN {
 
 describe('games', () => {
   /** A reward campaign: no artwork, its content a live widget. */
-  function game(id: string): InAppMessage {
+  function game(
+    id: string,
+    type: 'modal' | 'fullscreen' = 'modal'
+  ): InAppMessage {
     return message({
       id,
-      type: 'modal',
+      type,
       header: null,
       body: null,
       widget: {
@@ -628,6 +631,95 @@ describe('games', () => {
     expect(calls.log).toEqual(['shown', 'completed']);
     // Finishing is not leaving: the customer is still reading what they won.
     expect(presenter.isShowing).toBe(true);
+    unmount(tree);
+  });
+
+  /** The control the SDK draws to close a game: the widget's own page shows none on mobile. */
+  function closeButton(
+    tree: TestRenderer.ReactTestRenderer
+  ): TestRenderer.ReactTestInstance {
+    return tree.root.findByProps({ testID: 'gb-iam-close' });
+  }
+
+  it.each(['modal', 'fullscreen'] as const)(
+    'draws a close button over a %s game, and closes the game with it',
+    (type) => {
+      const presenter = gamePresenter();
+      const Host = createGameballInAppMessages(presenter);
+      const tree = mount(<Host />);
+      const calls = recorder();
+      act(() => {
+        presenter.present(game('g', type), calls);
+      });
+      act(() => post(tree, 'gb:ready'));
+
+      const close = closeButton(tree);
+      expect(close.props.accessibilityLabel).toBe('Close');
+      expect(close.props.accessibilityRole).toBe('button');
+
+      act(() => close.props.onPress());
+      expect(calls.log).toEqual(['shown', 'dismissed']);
+      expect(presenter.isShowing).toBe(false);
+      unmount(tree);
+    }
+  );
+
+  it.each(['modal', 'fullscreen'] as const)(
+    "puts a %s game's close button at the top end, in the safe area, with room for a thumb",
+    (type) => {
+      const presenter = gamePresenter();
+      const Host = createGameballInAppMessages(presenter);
+      const tree = mount(<Host insets={{ top: 47, bottom: 34 }} />);
+      act(() => {
+        presenter.present(game('g', type), recorder());
+      });
+
+      const style = StyleSheet.flatten(closeButton(tree).props.style) as {
+        position?: string;
+        top?: number;
+        end?: number;
+        left?: number;
+        right?: number;
+        width?: number;
+        height?: number;
+      };
+      expect(style.position).toBe('absolute');
+      // The logical end, never a physical side: React Native mirrors `end` under RTL itself.
+      expect(style.end).toBeGreaterThanOrEqual(0);
+      expect(style.left).toBeUndefined();
+      expect(style.right).toBeUndefined();
+      // 44pt is the smallest target either platform's guidelines allow.
+      expect(style.width).toBeGreaterThanOrEqual(44);
+      expect(style.height).toBeGreaterThanOrEqual(44);
+      if (type === 'fullscreen') {
+        // Edge to edge, so it clears the notch by the top inset.
+        expect(style.top).toBeGreaterThanOrEqual(47);
+      } else {
+        // On the card, which sits centred well inside the safe area.
+        const card = tree.root.findByProps({ testID: 'gb-iam-game-card' });
+        const onCard = card.findAll(
+          (n) => typeof n.type === 'string' && n.props.testID === 'gb-iam-close'
+        );
+        expect(onCard).toHaveLength(1);
+      }
+      unmount(tree);
+    }
+  );
+
+  it('closes a modal game at a tap on the dimmed app around it', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g', 'modal'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() =>
+      tree.root.findByProps({ testID: 'gb-iam-scrim' }).props.onPress()
+    );
+    expect(calls.log).toEqual(['shown', 'dismissed']);
     unmount(tree);
   });
 

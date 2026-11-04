@@ -53,17 +53,23 @@ export function closeInlineEnd(inset: number): { end: number } {
   return { end: inset };
 }
 
-/** A close glyph drawn from two crossing bars, so the SDK ships no icon asset. */
+/**
+ * A close glyph drawn from two crossing bars, so the SDK ships no icon asset.
+ *
+ * `disc` draws it on a filled circle, for content whose colours the SDK cannot know.
+ */
 export function CloseGlyph({
   style,
   color,
   onPress,
   accessibilityLabel,
+  disc,
 }: {
   style?: StyleProp<ViewStyle>;
   color: string;
   onPress: () => void;
   accessibilityLabel: string;
+  disc?: string;
 }) {
   const bar: ViewStyle = {
     position: 'absolute',
@@ -72,6 +78,12 @@ export function CloseGlyph({
     borderRadius: 1,
     backgroundColor: color,
   };
+  const bars = (
+    <>
+      <View style={[bar, { transform: [{ rotate: '45deg' }] }]} />
+      <View style={[bar, { transform: [{ rotate: '-45deg' }] }]} />
+    </>
+  );
   return (
     <Pressable
       accessibilityRole="button"
@@ -81,8 +93,11 @@ export function CloseGlyph({
       onPress={onPress}
       style={[styles.close, style]}
     >
-      <View style={[bar, { transform: [{ rotate: '45deg' }] }]} />
-      <View style={[bar, { transform: [{ rotate: '-45deg' }] }]} />
+      {disc ? (
+        <View style={[styles.disc, { backgroundColor: disc }]}>{bars}</View>
+      ) : (
+        bars
+      )}
     </Pressable>
   );
 }
@@ -215,5 +230,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+  },
+  disc: {
+    width: MessageMetrics.closeDiscSize,
+    height: MessageMetrics.closeDiscSize,
+    borderRadius: MessageMetrics.closeDiscSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

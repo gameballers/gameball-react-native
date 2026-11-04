@@ -858,6 +858,16 @@ describe('InAppMessagingService', () => {
       });
     });
 
+    it('reports nothing when a game is closed, as it reports nothing when one is shown', async () => {
+      const h = harness(sync([game(9645)]));
+      await h.service.start({ customerId: 'c1' });
+      h.presenter.paint();
+      h.presenter.dismiss();
+
+      expect(opened(h)).toEqual([9645]);
+      expect(h.analytics.events).toEqual([]);
+    });
+
     describe('two on one trigger', () => {
       /** Two games on the same event: identical in every field but the game they open. */
       const twoGames = () =>
