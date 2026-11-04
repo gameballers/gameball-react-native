@@ -10,7 +10,11 @@ import {
   selectCampaign,
 } from '../evaluation/select-campaign';
 import { iamLog } from '../log';
-import { campaignKeyOf, type Campaign } from '../models/campaign';
+import {
+  campaignKeyOf,
+  describeCampaign,
+  type Campaign,
+} from '../models/campaign';
 import type { CampaignKey } from '../models/campaign-key';
 import {
   artworkUrlsOf,
@@ -418,15 +422,15 @@ export class InAppMessagingService {
         this.prefetchTimeoutMs,
         () => {
           iamLog(
-            `campaign "${campaign.campaignId}" artwork did not load within ${this.prefetchTimeoutMs}ms`
+            `${describeCampaign(campaign)} artwork did not load within ${
+              this.prefetchTimeoutMs
+            }ms`
           );
           return false;
         }
       );
     } catch (error) {
-      iamLog(
-        `campaign "${campaign.campaignId}" artwork failed (${String(error)})`
-      );
+      iamLog(`${describeCampaign(campaign)} artwork failed (${String(error)})`);
       return false;
     }
   }
@@ -473,14 +477,16 @@ export class InAppMessagingService {
     for (const c of this.campaigns) {
       if (!this.artworkReady.has(campaignKeyOf(c))) {
         notReady.push(c);
-        iamLog(`campaign "${c.campaignId}" passed over: artwork not ready`);
+        iamLog(`${describeCampaign(c)} passed over: artwork not ready`);
       } else if (this.campaignsFromCache && c.message.widget) {
         // A game is never opened from a cached set. A message carries its own content, so a
         // cached one is still correct; a game carries a pointer and fetches its content live, so
         // a cached entry is a promise this SDK cannot keep. Dropped rather than deferred: the
         // next live sync is what makes it openable again.
         iamLog(
-          `game ${c.message.widget.gameCampaignId} skipped: the campaign set came from the cache, and a game must be confirmed live before it is opened`
+          `${describeCampaign(
+            c
+          )} skipped: the campaign set came from the cache, and a game must be confirmed live before it is opened`
         );
       } else {
         displayable.push(c);
@@ -503,7 +509,7 @@ export class InAppMessagingService {
     this.emit?.(campaign.message);
     switch (this.decide(campaign.message)) {
       case 'discard':
-        iamLog(`campaign "${campaign.campaignId}" discarded by beforeDisplay`);
+        iamLog(`${describeCampaign(campaign)} discarded by beforeDisplay`);
         return;
       case 'later':
         this.defer(campaign, 'the host asked to display it later');
@@ -527,7 +533,11 @@ export class InAppMessagingService {
     if (!this.presenter.isShowing || this.pending !== null) return;
     const runnerUp = selectCampaign({
       occurrence,
-      campaigns: displayable.filter((c) => c.campaignId !== winner.campaignId),
+      // By key, never by campaignId: every game carries campaignId 0, so comparing that ruled
+      // out every other game along with the one that won.
+      campaigns: displayable.filter(
+        (c) => campaignKeyOf(c) !== campaignKeyOf(winner)
+      ),
       capState: capBefore,
       nowMs: this.clock(),
       cooldownMs: this.cooldownMs,
@@ -536,7 +546,7 @@ export class InAppMessagingService {
     if (runnerUp)
       this.defer(
         runnerUp,
-        `campaign "${winner.campaignId}" took this trigger first`
+        `${describeCampaign(winner)} took this trigger first`
       );
   }
 
@@ -582,7 +592,11 @@ export class InAppMessagingService {
           this.variableTimeoutMs,
           () => {
             iamLog(
-              `personalisation for campaign "${campaign.campaignId}" did not arrive within ${this.variableTimeoutMs}ms; displaying the text from the last sync`
+              `personalisation for ${describeCampaign(
+                campaign
+              )} did not arrive within ${
+                this.variableTimeoutMs
+              }ms; displaying the text from the last sync`
             );
             return {} as Record<string, string>;
           }
@@ -591,7 +605,7 @@ export class InAppMessagingService {
       }
     } catch (error) {
       iamLog(
-        `personalisation for campaign "${campaign.campaignId}" failed (${String(
+        `personalisation for ${describeCampaign(campaign)} failed (${String(
           error
         )}); displaying the text from the last sync`
       );
@@ -601,7 +615,9 @@ export class InAppMessagingService {
     message = clearUnresolvedTokens(message);
     if (!this.isStarted || this.generation !== generation) {
       iamLog(
-        `campaign "${campaign.campaignId}" abandoned: messaging stopped while its personalisation was resolving`
+        `${describeCampaign(
+          campaign
+        )} abandoned: messaging stopped while its personalisation was resolving`
       );
       return;
     }
@@ -668,12 +684,14 @@ export class InAppMessagingService {
   }
 
   private defer(campaign: Campaign, reason: string): void {
-    if (this.pending && this.pending.campaignId !== campaign.campaignId)
+    if (this.pending && campaignKeyOf(this.pending) !== campaignKeyOf(campaign))
       iamLog(
-        `pending campaign "${this.pending.campaignId}" displaced by "${campaign.campaignId}"`
+        `pending ${describeCampaign(
+          this.pending
+        )} displaced by ${describeCampaign(campaign)}`
       );
     this.pending = campaign;
-    iamLog(`campaign "${campaign.campaignId}" deferred: ${reason}`);
+    iamLog(`${describeCampaign(campaign)} deferred: ${reason}`);
   }
 
   private logEvent(
@@ -691,7 +709,9 @@ export class InAppMessagingService {
     // still recorded; only the reporting stops.
     if (campaign.message.widget) {
       iamLog(
-        `game ${campaign.message.widget.gameCampaignId} displayed; reporting nothing, as engagement is recorded through the challenge flow`
+        `${describeCampaign(
+          campaign
+        )} displayed; reporting nothing, as engagement is recorded through the challenge flow`
       );
       return;
     }
@@ -718,7 +738,9 @@ export class InAppMessagingService {
     const now = this.clock();
     if (!isRepeatEligible(campaign, capState, now)) {
       iamLog(
-        `pending campaign "${campaign.campaignId}" dropped: it may not display again yet`
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it may not display again yet`
       );
       return;
     }
@@ -729,7 +751,9 @@ export class InAppMessagingService {
     }
     if (this.quietHours && quietHoursContains(this.quietHours, new Date(now))) {
       iamLog(
-        `pending campaign "${campaign.campaignId}" dropped: it is now inside the quiet-hours window`
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it is now inside the quiet-hours window`
       );
       return;
     }

@@ -34,6 +34,20 @@ export function campaignKeyOf(campaign: Campaign): CampaignKey {
   return widget ? gameKey(widget.gameCampaignId) : messageKey(campaign.campaignId);
 }
 
+/**
+ * How a log line names a campaign: a game as `game:<id>`, by the game it opens, and a message as
+ * `campaign "<id>"`.
+ *
+ * Every game entry carries `campaignId: 0`, so naming one by it made every game read the same —
+ * and two games on one trigger read as one campaign displacing itself.
+ */
+export function describeCampaign(campaign: Campaign): string {
+  const widget = campaign.message.widget;
+  return widget
+    ? gameKey(widget.gameCampaignId)
+    : `campaign "${campaign.campaignId}"`;
+}
+
 export function hasExpiredAt(campaign: Campaign, nowMs: number): boolean {
   return campaign.expiresAt !== null && nowMs >= campaign.expiresAt;
 }

@@ -824,5 +824,55 @@ describe('InAppMessagingService', () => {
         expect(opened(h)).toEqual([]);
       });
     });
+
+    describe('two on one trigger', () => {
+      /** Two games on the same event: identical in every field but the game they open. */
+      const twoGames = () =>
+        harness(
+          sync(
+            [
+              game(9645, { trigger: eventTrigger('spin') }),
+              game(9702, { trigger: eventTrigger('spin') }),
+            ],
+            { cooldownMs: 10_000 }
+          )
+        );
+
+      it('keeps the second waiting behind the first, and opens it once the floor lapses', async () => {
+        // Every game carries campaignId 0, so telling the runner-up from the winner by that id
+        // ruled out both: the second game was never kept.
+        const h = twoGames();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+        expect(h.service.pendingCampaign?.message.widget?.gameCampaignId).toBe(
+          9702
+        );
+
+        h.presenter.paint();
+        h.advance(3_000);
+        h.presenter.dismiss();
+        h.advance(7_000);
+        await jest.advanceTimersByTimeAsync(7_000);
+        expect(opened(h)).toEqual([9645, 9702]);
+      });
+
+      it('names each game in the log by its own id, never as campaign "0"', async () => {
+        const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          const h = twoGames();
+          await h.service.start({ customerId: 'c1' });
+          h.service.onCustomEvent('spin');
+
+          const lines = log.mock.calls.map((call) => String(call[0]));
+          expect(lines).toContain(
+            '[GameballIAM] game:9702 deferred: game:9645 took this trigger first'
+          );
+          expect(lines.join('\n')).not.toContain('campaign "0"');
+        } finally {
+          log.mockRestore();
+        }
+      });
+    });
   });
 });
