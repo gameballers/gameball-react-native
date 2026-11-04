@@ -335,6 +335,14 @@ export class InAppMessagingService {
     const customerId = this.customerId;
     if (customerId === null) return;
     const generation = this.generation;
+    // Whatever waits belongs to the session that parked it. The new session's sync decides
+    // afresh, and session start is evaluated again once it has.
+    if (this.pending !== null) {
+      iamLog(
+        `pending ${describeCampaign(this.pending)} dropped: a new session began`
+      );
+    }
+    this.clearPending();
 
     let cached: SyncResult | null = null;
     if (loadPersisted) {

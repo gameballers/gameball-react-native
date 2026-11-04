@@ -1016,6 +1016,33 @@ describe('InAppMessagingService', () => {
         expect(opened(h)).toEqual([]);
         expect(h.service.pendingCampaign).toBeNull();
       });
+
+      it.each([
+        ['a game', game(9645, { trigger: eventTrigger('e') }), 9645],
+        ['a message', campaign(2, { trigger: eventTrigger('e') }), '2'],
+      ] as const)(
+        'lets go of %s left waiting when a new session syncs, even one that still carries it',
+        async (_kind, parkedCampaign, id) => {
+          let overlayOpen = true;
+          const h = harness(sync([parkedCampaign]), {
+            overlayOpen: () => overlayOpen,
+          });
+          await h.service.start({ customerId: 'c1' });
+          h.service.onCustomEvent('e');
+          expect(waiting(h)).toBe(id);
+
+          // What waits belongs to the session that parked it; the new one decides afresh.
+          h.service.onAppPaused();
+          h.advance(31_000);
+          h.service.onAppResumed();
+          await jest.advanceTimersByTimeAsync(0);
+          expect(h.service.pendingCampaign).toBeNull();
+
+          overlayOpen = false;
+          h.service.onHostOverlayClosed();
+          expect(opened(h)).toEqual([]);
+        }
+      );
     });
   });
 });
