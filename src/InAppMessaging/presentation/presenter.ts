@@ -9,6 +9,9 @@ export interface PresentCallbacks {
   onMessagePressed(): void;
   /** Exactly once, after the message leaves the screen, however it left. */
   onDismissed(): void;
+  /** When the game this message opened reports that the customer finished playing it. Only a
+   * game calls this, and it does not dismiss: the customer is still reading what they won. */
+  onGameCompleted?(): void;
 }
 
 export interface MessagePresenter {

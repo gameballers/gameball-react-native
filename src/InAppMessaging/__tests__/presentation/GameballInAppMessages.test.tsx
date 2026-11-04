@@ -330,6 +330,7 @@ function recorder() {
     onDismissed: () => log.push('dismissed'),
     onButtonPressed: () => log.push('button'),
     onMessagePressed: () => log.push('tap'),
+    onGameCompleted: () => log.push('completed'),
   };
 }
 
@@ -594,6 +595,57 @@ describe('games', () => {
     act(() => post(tree, 'gb:ready'));
     expect(hidden(tree)).toBe(false);
     expect(next.log).toEqual(['shown']);
+    unmount(tree);
+  });
+
+  it('reports a finished game against the game it opened, whatever the widget calls it', () => {
+    // The widget names the challenge and its own game type ('spinTheWheel' for a 'wheel'), which
+    // are not the sync's literals: the completion belongs to whichever game this view opened.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() =>
+      post(
+        tree,
+        'gb:event:' +
+          JSON.stringify({
+            type: 'gameCompleted',
+            metadata: {
+              hasWon: true,
+              campaignId: '123',
+              campaignType: 'spinTheWheel',
+            },
+          })
+      )
+    );
+
+    expect(calls.log).toEqual(['shown', 'completed']);
+    // Finishing is not leaving: the customer is still reading what they won.
+    expect(presenter.isShowing).toBe(true);
+    unmount(tree);
+  });
+
+  it('takes no other widget event, nor one it cannot read, for a finished game', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() => post(tree, 'gb:event:{"type":"gameStarted","metadata":{}}'));
+    act(() => post(tree, 'gb:event:gameCompleted'));
+    act(() => post(tree, 'gb:event:[object Object]'));
+
+    expect(calls.log).toEqual(['shown']);
     unmount(tree);
   });
 });

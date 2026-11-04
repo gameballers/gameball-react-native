@@ -117,6 +117,7 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
             }}
             onFailed={dismiss}
             onDismiss={dismiss}
+            onCompleted={() => current.callbacks.onGameCompleted?.()}
             topInset={topInset}
             bottomInset={bottomInset}
           />

@@ -874,5 +874,87 @@ describe('InAppMessagingService', () => {
         }
       });
     });
+
+    describe('after a play', () => {
+      /** A wheel that may open on every spin event, as far as its frequency goes. */
+      const wheel = () =>
+        harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin'), repeatable: true }),
+          ])
+        );
+
+      /** The open game reports that the customer finished playing it. */
+      const finish = (h: ReturnType<typeof harness>) =>
+        h.presenter.current!.callbacks.onGameCompleted?.();
+
+      /** Long enough away for a resume to start a new session, with its own sync. */
+      const newSession = async (h: ReturnType<typeof harness>) => {
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        await jest.advanceTimersByTimeAsync(0);
+      };
+
+      it('is not offered again until the next successful sync', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        finish(h);
+        h.presenter.dismiss();
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        await newSession(h);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('stays put through a sync that failed', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        finish(h);
+        h.presenter.dismiss();
+
+        h.source.result = new Error('offline');
+        await newSession(h);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
+
+      it('is dropped from the waiting slot, where it was parked while it was being played', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        h.advance(31_000);
+        h.service.onCustomEvent('spin'); // the same game again, parked behind itself
+        expect(h.service.pendingCampaign?.message.widget?.gameCampaignId).toBe(
+          9645
+        );
+
+        finish(h);
+        h.presenter.dismiss();
+        expect(opened(h)).toEqual([9645]);
+        expect(h.service.pendingCampaign).toBeNull();
+      });
+
+      it('a game closed without being played is offered again as its frequency allows', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        h.presenter.dismiss();
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+    });
   });
 });

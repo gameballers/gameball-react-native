@@ -36,8 +36,32 @@ interface Props {
   /** The campaign never became ready; take the message away having never shown it. */
   onFailed: () => void;
   onDismiss: () => void;
+  /** The widget reported the game finished: the customer played it through. */
+  onCompleted: () => void;
   topInset?: number;
   bottomInset?: number;
+}
+
+const EVENT_PREFIX = 'gb:event:';
+
+/**
+ * The type of an event the widget posted, or null when this cannot read one.
+ *
+ * Only the type is read. The rest names the challenge and the widget's own game type —
+ * `spinTheWheel` where the sync says `wheel` — so it is never matched against the sync: an event
+ * from this view belongs to the game this view opened.
+ */
+function widgetEventType(raw: string): string | null {
+  try {
+    const event: unknown = JSON.parse(raw);
+    if (typeof event === 'object' && event !== null && !Array.isArray(event)) {
+      const type = (event as { type?: unknown }).type;
+      return typeof type === 'string' ? type : null;
+    }
+  } catch {
+    // Not JSON: nothing this view acts on.
+  }
+  return null;
 }
 
 /**
@@ -53,6 +77,7 @@ export function WidgetView({
   onShown,
   onFailed,
   onDismiss,
+  onCompleted,
   topInset = 0,
   bottomInset = 0,
 }: Props): React.ReactElement {
@@ -100,13 +125,15 @@ export function WidgetView({
         onDismiss();
         return;
       }
-      if (raw.startsWith('gb:event:')) {
-        iamLog(
-          `game ${message.widget?.gameCampaignId ?? 0} reported ${raw.slice('gb:event:'.length)}`
-        );
+      if (raw.startsWith(EVENT_PREFIX)) {
+        const event = raw.slice(EVENT_PREFIX.length);
+        iamLog(`game:${message.widget?.gameCampaignId ?? 0} reported ${event}`);
+        if (widgetEventType(event) === 'gameCompleted') {
+          onCompleted();
+        }
       }
     },
-    [settle, onDismiss, message.widget]
+    [settle, onDismiss, onCompleted, message.widget]
   );
 
   const fullscreen = message.type === 'fullscreen';
