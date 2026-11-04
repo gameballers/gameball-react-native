@@ -209,7 +209,7 @@ await GameballApp.getInstance().sendEvent({
 });
 ```
 
-A campaign on `add_to_cart` can require `productId` to equal `sku-001`, or `price` to be above a number, and so on. A purchase logged through `logPurchase` reaches campaigns as an event named `purchase` whose `productId`, `price`, `currency` and `quantity` are available to filters.
+A campaign on `add_to_cart` can require `productId` to equal `sku-001`, or `price` to be above a number, and so on. Its conditions are joined as the dashboard set them: with "All", every one has to match; with "Any", one is enough. A purchase logged through `logPurchase` reaches campaigns as an event named `purchase` whose `productId`, `price`, `currency` and `quantity` are available to filters.
 
 Whether a matching campaign actually appears also depends on its frequency cap, the minimum interval between any two displays, its expiry and its priority — all set in the dashboard.
 
@@ -262,29 +262,55 @@ Impressions, clicks and dismissals are reported automatically — no integration
 A campaign the merchant set to open itself over your app — a spin the wheel, a quiz, a scratch and
 win. It arrives in the same sync as in-app messages and draws on the same surface, so **there is
 nothing extra to integrate**: if you already mount `<GameballInAppMessages />` and start messaging,
-game campaigns work.
+game campaigns work. You never need to call `showProfile` first: a game opens with in-app
+messaging's own configuration — the api key, language, session token and widget host you gave
+`init` — for the customer messaging runs for.
 
 The campaign *is* the content. There is no headline or button to style — the SDK opens the game
-itself in a card over your app, and shows the card only once the game has finished drawing, so your
-customer never sees a loading state.
+itself over your app, and shows it only once the game has finished drawing, so your customer never
+sees a loading state.
 
 While a game loads, your app stays fully usable: it loads out of sight in
 `<GameballInAppMessages />`'s own layer, not a native modal, and takes the screen only once it has
 drawn. That layer lives in your view tree, so mount it after your navigator as shown above — and a
 modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up.
 
-A game campaign can be authored as a modal or fullscreen. Fullscreen insets its content into the
-safe area, so the campaign's own controls stay clear of the notch and the home indicator.
+A game campaign can be authored as a modal — a card over the dimmed app — or fullscreen. Fullscreen
+insets its content into the safe area, so the campaign's own controls stay clear of the notch and
+the home indicator.
 
-Requires `react-native-webview`, which the SDK already lists as a peer dependency for the profile
-widget.
+**Closing a game.** The game's page shows no way out on mobile, so the SDK draws a close button at
+the top end of every game — on the card of a modal game, below the notch on a fullscreen one —
+labelled "Close" for screen readers. A tap on the dimmed app around a modal game closes it too, and
+Android's back button closes either kind.
+
+**How often a game opens** follows exactly the rules for in-app messages: once ever unless the
+campaign is repeatable, then no sooner than its own minimum interval when it has one; never within
+the account's cooldown since any message or game was last shown; never during quiet hours. There is
+no game-specific delay, interval or dismissal limit.
+
+**After a play**, a game the customer finished is not offered again until the next successful sync,
+which is where Gameball says whether they can still play it. A game closed without being played is
+offered again as its frequency allows.
+
+**Conditions.** A game on a custom event filters its metadata just as a message does, with "All"
+or "Any" of its conditions.
+
+A game opens only from a sync that succeeded in the current session. When a sync fails, the SDK
+keeps showing messages from the campaigns it already has — they carry their own content — but opens
+no game from them, since the campaign may have ended in the meantime.
+
+Requires `react-native-webview`, which the SDK lists as a peer dependency for the profile widget.
+To test against a non-production environment, set `widgetUrlPrefix` on the configuration you pass
+`init`; it applies to the profile widget and to every game.
 
 One limit in this release: **screen triggers do not fire on mobile.** Use a session-start or
 custom-event trigger instead. A screen-triggered campaign is skipped with a `[GameballIAM]` log
-naming it, so one that does not appear can be diagnosed from the console.
+naming it, so one that does not appear can be diagnosed from the console. The same log prints the
+URL each game opens at, with the api key and session token redacted.
 
-Game campaigns report no in-app messaging telemetry — engagement is recorded through the normal
-challenge flow when the customer plays.
+Game campaigns report no in-app messaging telemetry, whether shown, played or closed — engagement is
+recorded through the normal challenge flow when the customer plays.
 
 ## API Methods
 
@@ -484,6 +510,7 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `platform` | string | ❌ | Platform identifier |
 | `sessionToken` | string | ❌ | Session Token for secure authentication (enables automatic v4.1 endpoint routing) |
 | `apiPrefix` | string | ❌ | Custom API base URL |
+| `widgetUrlPrefix` | string | ❌ | Custom widget host, for the profile widget and every game campaign. `ShowProfileRequest.widgetUrlPrefix` overrides it for one presentation. Production when omitted |
 | `debug` | boolean | ❌ | In-app messaging console logs, prefixed `[GameballIAM]`. Defaults to `__DEV__` (v4.0.0+) |
 
 ### InitializeCustomerRequest

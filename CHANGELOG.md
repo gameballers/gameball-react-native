@@ -9,21 +9,28 @@ All notable changes to Gameball React Native SDK are documented here.
 > **Minor Release**: Game campaigns — a reward campaign opens itself over your app from an in-app trigger
 
 ### ✨ Added
-- 🎡 **Game campaigns**: a spin the wheel, quiz or scratch and win the merchant set to open over your app arrives in the same sync as in-app messages and draws on the same surface. **Nothing to integrate** — a host already mounting `<GameballInAppMessages />` gets them
+- 🎡 **Game campaigns**: a spin the wheel, quiz or scratch and win the merchant set to open over your app arrives in the same sync as in-app messages and draws on the same surface. **Nothing to integrate** — a host already mounting `<GameballInAppMessages />` and starting messaging gets them. `showProfile` never has to be called first: a game opens with in-app messaging's own configuration — the api key, language, session token and widget host given to `init` — for the customer messaging runs for
 - 🧩 **The campaign is the content**: the SDK opens the game itself and shows the card only once it has finished drawing, so the customer never sees a loading state
 - 🖥️ **Modal and fullscreen**: fullscreen insets its content into the safe area while the surface behind runs edge to edge
+- ✖️ **A close button over every game**: the widget's page shows no way out of a game on mobile, so the SDK draws one at the top end — on the card of a modal game, below the notch on a fullscreen one — with a 48pt target and the accessibility label "Close". A tap on the dimmed app around a modal game closes it too, and Android's back button closes either kind
+- 🎯 **After a play, a game waits for the next sync**: once the customer finishes a game, it is not offered again until the next successful sync, which is where Gameball says whether they can still play it. A game closed without being played is offered again as its frequency allows
+- 🔀 **"Any" conditions**: a campaign whose event conditions are joined with "Any" (`OR`) shows when at least one of them matches — messages and games alike. Such campaigns were skipped before. One none of whose conditions this SDK can read is still skipped, rather than shown on every event
+- 🌐 **`widgetUrlPrefix` on `GameballConfig`**: sets the widget host once, for the profile widget and for every game a message opens. `ShowProfileRequest.widgetUrlPrefix` still overrides it for one presentation
 - 🛡️ **Unknown kinds are skipped, never guessed at.** An entry whose `campaignType` or game type this version does not recognise is dropped with a log naming it, so a future kind degrades to silence rather than to a wrong display
 
 ### 🔒 Changed
 - 🔑 **Display history is keyed by campaign kind and id.** Challenge ids and message campaign ids are separate sequences that overlap numerically, and every game entry arrives with `campaignId: 0` — so a bare number can no longer identify a campaign. Histories written by earlier releases are migrated on read; nothing is lost and no campaign re-shows
-- 📊 **Game campaigns report no in-app messaging telemetry.** Engagement is recorded through the normal challenge flow when the customer plays. Their display history is still kept, so a once-ever game stays once-ever
-- 🗂️ **A game is never opened from a cached campaign set.** A message carries its own content, so a cached one is still correct; a game carries a pointer and fetches its content live, so a cached entry is a promise the SDK cannot keep
+- ⏱️ **Games follow the in-app message frequency rules exactly**: once ever unless the campaign is repeatable, then its own minimum interval when it has one, the account-wide cooldown between any two displays, and quiet hours. There is no game-specific delay, interval or dismissal limit
+- 📊 **Game campaigns report no in-app messaging telemetry**, whether shown, played or closed. Engagement is recorded through the normal challenge flow when the customer plays. Their display history is still kept, so a once-ever game stays once-ever
+- 🗂️ **A game opens only from a campaign set this session's sync confirmed** — never from the cached set a failed launch sync falls back to, nor from the last session's set when the sync after a resume fails. A message carries its own content, so it still shows from either; a game carries a pointer and fetches its content live, so an unconfirmed entry is a promise the SDK cannot keep
+- ⏳ **A campaign waiting for the screen is checked again before it shows**: it is dropped if it expired while it waited or the latest sync no longer carries it, and whatever waits is let go when a new session syncs. Two games on one trigger queue like two messages, the second waiting behind the first
 
 ### ⚠️ Not yet supported
-- 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger
+- 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger. A screen-triggered campaign is skipped with a `[GameballIAM]` log naming it
 
 ### 📝 Notes
 - 🧭 **A game loads out of sight, in `<GameballInAppMessages />`'s own layer, not a native modal.** Your app keeps its taps and its back button while the game draws, and the game takes the screen only once it has drawn. A modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up
+- 🔍 **Diagnosing a game that does not open**: the `[GameballIAM]` log prints the URL each game opens at, with the api key and session token redacted, and names each game as `game:<id>`
 
 ---
 
