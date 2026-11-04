@@ -14,11 +14,27 @@ import { parseSyncResponse } from '../../source/parser';
 
 export class FakeSource implements MessageSource {
   fetches = 0;
+  private gate: Promise<void> | null = null;
   constructor(
     public result: SyncResult | (() => SyncResult) | Error = emptySyncResult()
   ) {}
+  /**
+   * Holds every fetch from now on until the returned release is called, as a slow network would.
+   * The result is read on release, so a test can still change what the sync will answer.
+   */
+  hold(): () => void {
+    let release!: () => void;
+    this.gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return () => {
+      this.gate = null;
+      release();
+    };
+  }
   async fetch(_customerId: string): Promise<SyncResult> {
     this.fetches++;
+    if (this.gate) await this.gate;
     if (this.result instanceof Error) throw this.result;
     return typeof this.result === 'function' ? this.result() : this.result;
   }

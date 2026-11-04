@@ -956,5 +956,66 @@ describe('InAppMessagingService', () => {
         expect(opened(h)).toEqual([9645, 9645]);
       });
     });
+
+    describe('waiting', () => {
+      /** The id of whatever sits in the waiting slot: a game by its own id, a message by its id. */
+      const waiting = (h: ReturnType<typeof harness>) => {
+        const parked = h.service.pendingCampaign;
+        return parked
+          ? parked.message.widget?.gameCampaignId ?? parked.message.id
+          : null;
+      };
+
+      it.each([
+        ['a game', game(9645, { trigger: eventTrigger('e') }), 9645],
+        ['a message', campaign(2, { trigger: eventTrigger('e') }), '2'],
+      ] as const)(
+        'drops %s that expired while it waited',
+        async (_kind, parkedCampaign, id) => {
+          const h = harness(
+            sync([campaign(1), { ...parkedCampaign, expiresAt: T0 + 60_000 }])
+          );
+          await h.service.start({ customerId: 'c1' });
+          h.presenter.paint();
+          h.advance(31_000);
+          h.service.onCustomEvent('e'); // parked behind message 1
+          expect(waiting(h)).toBe(id);
+
+          h.advance(30_000); // past its expiry
+          h.presenter.dismiss();
+          expect(opened(h)).toEqual(['1']);
+          expect(h.service.pendingCampaign).toBeNull();
+        }
+      );
+
+      it('drops a waiting game the latest sync no longer carries', async () => {
+        let overlayOpen = false;
+        const h = harness(
+          sync([game(9645, { trigger: eventTrigger('spin') })]),
+          {
+            overlayOpen: () => overlayOpen,
+          }
+        );
+        await h.service.start({ customerId: 'c1' });
+
+        // A new session begins, and its sync is still on the wire when the game's event fires:
+        // the game is judged against the set held from before, and parked behind an overlay.
+        const release = h.source.hold();
+        h.source.result = sync([]);
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        overlayOpen = true;
+        h.service.onCustomEvent('spin');
+        expect(waiting(h)).toBe(9645);
+
+        release(); // the backend no longer offers the game
+        await jest.advanceTimersByTimeAsync(0);
+        overlayOpen = false;
+        h.service.onHostOverlayClosed();
+        expect(opened(h)).toEqual([]);
+        expect(h.service.pendingCampaign).toBeNull();
+      });
+    });
   });
 });

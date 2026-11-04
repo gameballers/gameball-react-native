@@ -13,6 +13,7 @@ import { iamLog } from '../log';
 import {
   campaignKeyOf,
   describeCampaign,
+  hasExpiredAt,
   type Campaign,
 } from '../models/campaign';
 import type { CampaignKey } from '../models/campaign-key';
@@ -765,16 +766,35 @@ export class InAppMessagingService {
 
   private retryPending(): void {
     if (!this.isStarted) return;
-    const campaign = this.pending;
-    if (!campaign) return;
+    const parked = this.pending;
+    if (!parked) return;
     this.pending = null;
+    // Judged again on what is known now rather than when it was parked: a sync may have replaced
+    // the set since, and the time it waited may have taken it past its expiry.
+    const campaign = this.latestVersionOf(parked);
+    if (campaign === null) {
+      iamLog(
+        `pending ${describeCampaign(
+          parked
+        )} dropped: the latest sync no longer carries it`
+      );
+      return;
+    }
+    const now = this.clock();
+    if (hasExpiredAt(campaign, now)) {
+      iamLog(
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it expired while it waited`
+      );
+      return;
+    }
     const heldBack = this.gameHeldBack(campaign);
     if (heldBack !== null) {
       iamLog(`pending ${describeCampaign(campaign)} dropped: ${heldBack}`);
       return;
     }
     const capState = this.cap.snapshot();
-    const now = this.clock();
     if (!isRepeatEligible(campaign, capState, now)) {
       iamLog(
         `pending ${describeCampaign(
@@ -797,6 +817,12 @@ export class InAppMessagingService {
       return;
     }
     this.tryPresent(campaign);
+  }
+
+  /** The held set's version of a campaign, or null when the latest sync no longer carries it. */
+  private latestVersionOf(campaign: Campaign): Campaign | null {
+    const key = campaignKeyOf(campaign);
+    return this.campaigns.find((c) => campaignKeyOf(c) === key) ?? null;
   }
 
   /** Retries the parked message the moment the floor lapses. */
