@@ -42,6 +42,32 @@ describe('triggerMatches', () => {
     ).toBe(false);
     expect(triggerMatches(bigCart, eventOccurrence('add_to_cart'))).toBe(false);
   });
+  it('an "any" trigger matches when one of its filters passes', () => {
+    const anyCart: MessageTrigger = {
+      kind: 'event',
+      eventName: 'add_to_cart',
+      filters: [
+        { property: 'price', operator: 'greater_than', value: 100 },
+        { property: 'category', operator: 'equals', value: 'shoes' },
+      ],
+      match: 'any',
+    };
+    expect(
+      triggerMatches(
+        anyCart,
+        eventOccurrence('add_to_cart', { price: 80, category: 'shoes' })
+      )
+    ).toBe(true);
+    expect(
+      triggerMatches(
+        anyCart,
+        eventOccurrence('add_to_cart', { price: 80, category: 'bags' })
+      )
+    ).toBe(false);
+    expect(
+      triggerMatches(anyCart, eventOccurrence('view_item', { price: 120 }))
+    ).toBe(false);
+  });
   it('a purchase is an event named purchase with built-in properties', () => {
     const occ = purchaseOccurrence({
       productId: 'sku-1',

@@ -1,6 +1,7 @@
 import {
   filterMatches,
   allFiltersMatch,
+  anyFilterMatches,
   parseOperator,
   type PropertyFilter,
 } from '../../models/property-filter';
@@ -84,6 +85,29 @@ describe('allFiltersMatch', () => {
     expect(allFiltersMatch(filters, { price: 120, category: 'bags' })).toBe(
       false
     );
+  });
+});
+
+describe('anyFilterMatches', () => {
+  const filters = [f('greater_than', 100), f('equals', 'shoes', 'category')];
+
+  it('one passing filter is enough (OR)', () => {
+    expect(anyFilterMatches(filters, { price: 120, category: 'bags' })).toBe(
+      true
+    );
+    expect(anyFilterMatches(filters, { price: 80, category: 'shoes' })).toBe(
+      true
+    );
+  });
+  it('no passing filter is not', () => {
+    expect(anyFilterMatches(filters, { price: 80, category: 'bags' })).toBe(
+      false
+    );
+    expect(anyFilterMatches(filters, {})).toBe(false);
+  });
+  it('an empty list matches anything, as it does for every filter', () => {
+    // No conditions means the event alone triggers, whichever way they would have been joined.
+    expect(anyFilterMatches([], {})).toBe(true);
   });
 });
 

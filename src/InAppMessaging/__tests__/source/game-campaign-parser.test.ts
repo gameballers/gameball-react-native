@@ -95,6 +95,29 @@ describe('game campaigns', () => {
     });
   });
 
+  it('opens on "any" of its conditions, read exactly as for a message', () => {
+    const anyOf = WHEEL.replace(
+      '"trigger": { "type": "session_start", "repeatable": true }',
+      `"trigger": { "type": "event", "name": "purchase", "repeatable": true,
+        "metadataLogicalOperator": "OR", "metadataFilters": [
+          { "metadataId": 1, "name": "price", "value": "100", "operator": "Greater" },
+          { "metadataId": 2, "name": "category", "value": "shoes", "operator": "Equals" }
+        ] }`
+    );
+    const parsed = campaigns(anyOf);
+
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]!.trigger).toEqual({
+      kind: 'event',
+      eventName: 'purchase',
+      filters: [
+        { property: 'price', operator: 'greater_than', value: '100' },
+        { property: 'category', operator: 'equals', value: 'shoes' },
+      ],
+      match: 'any',
+    });
+  });
+
   describe('frequency, read exactly as for a message', () => {
     const withTrigger = (trigger: string) =>
       campaigns(
