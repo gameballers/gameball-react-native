@@ -1044,5 +1044,50 @@ describe('InAppMessagingService', () => {
         }
       );
     });
+
+    describe('when a new session cannot sync', () => {
+      it('opens no game from the set the last session held, though its messages still show', async () => {
+        const h = harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin') }),
+            campaign(2, { trigger: eventTrigger('promo') }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+
+        h.source.result = new Error('offline');
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        await jest.advanceTimersByTimeAsync(0);
+
+        // Nothing has confirmed the game is still live: it may have ended while the app was away.
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([]);
+        // A message carries its own content, so the held one is still correct.
+        h.service.onCustomEvent('promo');
+        expect(opened(h)).toEqual(['2']);
+      });
+
+      it('opens the game again once a later session syncs', async () => {
+        const live = sync([game(9645, { trigger: eventTrigger('spin') })]);
+        const h = harness(live);
+        await h.service.start({ customerId: 'c1' });
+        const newSession = async () => {
+          h.service.onAppPaused();
+          h.advance(31_000);
+          h.service.onAppResumed();
+          await jest.advanceTimersByTimeAsync(0);
+        };
+
+        h.source.result = new Error('offline');
+        await newSession();
+        h.source.result = live;
+        await newSession();
+
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
+    });
   });
 });

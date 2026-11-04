@@ -128,14 +128,16 @@ export class InAppMessagingService {
   private campaigns: Campaign[] = [];
 
   /**
-   * Whether the held campaigns came from the cache rather than a live sync.
+   * Why the held campaigns lack this session's confirmation, or null when this session's sync
+   * delivered them: they came from the cache, or this session's sync failed and they are the last
+   * session's.
    *
-   * Only games care. A message carries its own content, so a cached one is still correct; a game
-   * carries a pointer and fetches its content live, so a cached entry is a promise this SDK
-   * cannot keep — the campaign may have ended, and the widget would answer "this campaign is not
-   * available" to a customer who never asked for it.
+   * Only games care. A message carries its own content, so an unconfirmed one is still correct; a
+   * game carries a pointer and fetches its content live, so an unconfirmed entry is a promise this
+   * SDK cannot keep — the campaign may have ended, and the widget would answer "this campaign is
+   * not available" to a customer who never asked for it.
    */
-  private campaignsFromCache = false;
+  private unconfirmed: string | null = null;
   /**
    * Games the customer finished playing since the last successful sync.
    *
@@ -365,7 +367,7 @@ export class InAppMessagingService {
       const result = await this.source.fetch(customerId);
       if (this.generation !== generation) return;
       this.campaigns = result.campaigns;
-      this.campaignsFromCache = false;
+      this.unconfirmed = null;
       // The backend has now said which games this customer can still play.
       this.played = new Set();
       this.cooldownMs = result.cooldownMs;
@@ -380,10 +382,14 @@ export class InAppMessagingService {
     } catch (error) {
       if (this.generation !== generation) return;
       iamLog(`sync failed (${String(error)})`);
+      // Whatever is held now, nothing this session has confirmed it: kept from the last session
+      // on a resume, or read from the cache below.
+      this.unconfirmed =
+        "this session's sync failed, so the campaign set is the last session's";
     }
 
     if (!synced && cached) {
-      this.campaignsFromCache = true;
+      this.unconfirmed = 'the campaign set came from the cache';
       this.campaigns = cached.campaigns;
       this.cooldownMs = cached.cooldownMs;
       this.quietHours = cached.quietHours;
@@ -541,15 +547,14 @@ export class InAppMessagingService {
   /**
    * Why a game may not open now, or null when nothing holds it back. Never holds a message back.
    *
-   * A game is never opened from a cached set. A message carries its own content, so a cached one
-   * is still correct; a game carries a pointer and fetches its content live, so a cached entry is
-   * a promise this SDK cannot keep. Nor is a game opened again once it has been played, until a
-   * sync has said whether this customer can still play it.
+   * A game opens only from a set this session's sync confirmed — never from the cache, nor from
+   * the last session's set when this one's sync failed (see `unconfirmed`). Nor is a game opened
+   * again once it has been played, until a sync has said whether this customer can still play it.
    */
   private gameHeldBack(campaign: Campaign): string | null {
     if (!campaign.message.widget) return null;
-    if (this.campaignsFromCache)
-      return 'the campaign set came from the cache, and a game must be confirmed live before it is opened';
+    if (this.unconfirmed !== null)
+      return `${this.unconfirmed}, and a game must be confirmed live before it is opened`;
     if (this.played.has(campaignKeyOf(campaign)))
       return 'it was played since the last sync, and is offered again only once a sync has offered it';
     return null;
