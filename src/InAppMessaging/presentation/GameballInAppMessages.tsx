@@ -5,7 +5,7 @@ import type {
   PresentedMessage,
   ReactMessagePresenter,
 } from './message-presenter';
-import { deviceInsets } from './safe-area';
+import { type Insets, LiveInsets } from './safe-area';
 import { SlideupView } from './views/SlideupView';
 import { ModalView } from './views/ModalView';
 import { FullscreenView } from './views/FullscreenView';
@@ -13,14 +13,14 @@ import { WidgetView } from './views/WidgetView';
 
 export interface GameballInAppMessagesProps {
   /**
-   * Safe-area insets, when the app knows them.
+   * Safe-area insets, when the app knows them. Each edge given wins over the device's own.
    *
-   * Optional: the SDK reads `react-native-safe-area-context`'s start-up metrics when that package
-   * is installed, and otherwise falls back to the status-bar height on Android and 0 elsewhere.
-   * Pass these when the app's own insets are the authority — a screen that changes them, or a
-   * device the start-up read got wrong.
+   * Optional: with `react-native-safe-area-context` installed the SDK measures the safe area
+   * itself and follows it as it changes, turning the phone included; without it, it falls back
+   * to the status-bar height on Android and 0 elsewhere. Pass these when the app's own insets are
+   * the authority — a screen that changes them, or a device the measurement got wrong.
    */
-  insets?: { top?: number; bottom?: number };
+  insets?: { top?: number; right?: number; bottom?: number; left?: number };
 }
 
 /**
@@ -72,9 +72,13 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       return null;
     }
 
-    const device = deviceInsets();
-    const topInset = insets?.top ?? device.top;
-    const bottomInset = insets?.bottom ?? device.bottom;
+    /** The app's own value for an edge wins; the device's stands in for the rest. */
+    const withAppInsets = (device: Insets): Insets => ({
+      top: insets?.top ?? device.top,
+      right: insets?.right ?? device.right,
+      bottom: insets?.bottom ?? device.bottom,
+      left: insets?.left ?? device.left,
+    });
 
     const press = (button: MessageButton | null) => {
       if (button) {
@@ -107,20 +111,29 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
           // What a Modal did for VoiceOver once the game is up: the app behind it goes quiet.
           accessibilityViewIsModal={gameUp}
         >
-          <WidgetView
-            key={key}
-            message={message}
-            url={url}
-            onShown={() => {
-              setDrawnGame(key);
-              onShown();
+          <LiveInsets>
+            {(device) => {
+              const edge = withAppInsets(device);
+              return (
+                <WidgetView
+                  key={key}
+                  message={message}
+                  url={url}
+                  onShown={() => {
+                    setDrawnGame(key);
+                    onShown();
+                  }}
+                  onFailed={dismiss}
+                  onDismiss={dismiss}
+                  onCompleted={() => current.callbacks.onGameCompleted?.()}
+                  topInset={edge.top}
+                  rightInset={edge.right}
+                  bottomInset={edge.bottom}
+                  leftInset={edge.left}
+                />
+              );
             }}
-            onFailed={dismiss}
-            onDismiss={dismiss}
-            onCompleted={() => current.callbacks.onGameCompleted?.()}
-            topInset={topInset}
-            bottomInset={bottomInset}
-          />
+          </LiveInsets>
         </View>
       );
     }
@@ -128,17 +141,24 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
     if (message.type === 'slideup') {
       return (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-          <SlideupView
-            key={current.key}
-            message={message}
-            artwork={current.artwork}
-            onShown={current.onShown}
-            onFailed={dismiss}
-            onPress={press}
-            onDismiss={dismiss}
-            topInset={topInset}
-            bottomInset={bottomInset}
-          />
+          <LiveInsets>
+            {(device) => {
+              const edge = withAppInsets(device);
+              return (
+                <SlideupView
+                  key={current.key}
+                  message={message}
+                  artwork={current.artwork}
+                  onShown={current.onShown}
+                  onFailed={dismiss}
+                  onPress={press}
+                  onDismiss={dismiss}
+                  topInset={edge.top}
+                  bottomInset={edge.bottom}
+                />
+              );
+            }}
+          </LiveInsets>
         </View>
       );
     }
@@ -165,30 +185,38 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
         // above owns that, so this is only the required prop.
         onRequestClose={dismiss}
       >
-        {message.type === 'modal' ? (
-          <ModalView
-            key={current.key}
-            message={message}
-            artwork={current.artwork}
-            onShown={current.onShown}
-            onFailed={dismiss}
-            onPress={press}
-            onDismiss={dismiss}
-            onScrim={dismiss}
-          />
-        ) : (
-          <FullscreenView
-            key={current.key}
-            message={message}
-            artwork={current.artwork}
-            onShown={current.onShown}
-            onFailed={dismiss}
-            onPress={press}
-            onDismiss={dismiss}
-            topInset={topInset}
-            bottomInset={bottomInset}
-          />
-        )}
+        {/* Measured inside the Modal: on Android it is a window of its own, with its own insets. */}
+        <LiveInsets>
+          {(device) => {
+            const edge = withAppInsets(device);
+            return message.type === 'modal' ? (
+              <ModalView
+                key={current.key}
+                message={message}
+                artwork={current.artwork}
+                onShown={current.onShown}
+                onFailed={dismiss}
+                onPress={press}
+                onDismiss={dismiss}
+                onScrim={dismiss}
+              />
+            ) : (
+              <FullscreenView
+                key={current.key}
+                message={message}
+                artwork={current.artwork}
+                onShown={current.onShown}
+                onFailed={dismiss}
+                onPress={press}
+                onDismiss={dismiss}
+                topInset={edge.top}
+                rightInset={edge.right}
+                bottomInset={edge.bottom}
+                leftInset={edge.left}
+              />
+            );
+          }}
+        </LiveInsets>
       </Modal>
     );
   };

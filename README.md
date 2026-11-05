@@ -194,7 +194,7 @@ await GameballApp.getInstance().startInAppMessaging({ customerId: 'customer-123'
 
 Call `stopInAppMessaging()` on logout. It dismisses anything on screen, sends pending analytics and clears state.
 
-If your app uses `react-native-safe-area-context`, messages are placed clear of the notch and the home indicator. To pass your own insets instead: `<GameballInAppMessages insets={useSafeAreaInsets()} />`.
+If your app uses `react-native-safe-area-context`, messages are placed clear of the notch, the Dynamic Island and the home indicator, and follow them when the phone turns. To pass your own insets instead: `<GameballInAppMessages insets={useSafeAreaInsets()} />`; each edge you pass wins over the device's.
 
 ### What triggers a message
 
@@ -591,7 +591,7 @@ The component in-app messages are drawn on (v4.0.0+). Mount it once, near the ro
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `insets` | { top?: number; bottom?: number } | ❌ | Safe-area insets. Read from `react-native-safe-area-context` when installed; otherwise the status-bar height on Android and 0 elsewhere |
+| `insets` | { top?: number; right?: number; bottom?: number; left?: number } | ❌ | Safe-area insets; each edge given wins over the device's. Measured live by `react-native-safe-area-context` when installed, rotation included; otherwise the status-bar height on Android and 0 elsewhere |
 
 ### Purchase
 Passed to `logPurchase`, which sends a `purchase` event that in-app messaging campaigns can target (v4.0.0+).

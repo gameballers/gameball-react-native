@@ -25,6 +25,9 @@ All notable changes to Gameball React Native SDK are documented here.
 - 🗂️ **A game opens only from a campaign set this session's sync confirmed** — never from the cached set a failed launch sync falls back to, nor from the last session's set when the sync after a resume fails. A message carries its own content, so it still shows from either; a game carries a pointer and fetches its content live, so an unconfirmed entry is a promise the SDK cannot keep
 - ⏳ **A campaign waiting for the screen is checked again before it shows**: it is dropped if it expired while it waited or the latest sync no longer carries it, and whatever waits is let go when a new session syncs. Two games on one trigger queue like two messages, the second waiting behind the first
 
+### 🐛 Fixed
+- 🔄 **Turning the phone keeps messages and games in the safe area**: the insets were read once at start-up, top and bottom only, so in landscape a fullscreen message or game kept a portrait-sized gap at the top and ran under the Dynamic Island at the sides. They are now measured live on every edge through `react-native-safe-area-context`, and `insets` takes `left` and `right` too. A modal game card is no taller than the safe height less its margins, as on iOS, rather than 70% of the window, which in landscape left a card too short for a scratch card's play area
+
 ### ⚠️ Not yet supported
 - 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger. A screen-triggered campaign is skipped with a `[GameballIAM]` log naming it
 

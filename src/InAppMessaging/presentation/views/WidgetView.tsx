@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import {
+  I18nManager,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { iamLog } from '../../log';
@@ -25,10 +31,6 @@ const READY_TIMEOUT_MS = 12_000;
  */
 const WIDGET_ASPECT_RATIO = 0.7;
 
-/** The most of the screen a card may take vertically, so it clears the status bar on a small
- * device. */
-const WIDGET_MAX_HEIGHT_FRACTION = 0.7;
-
 interface Props {
   message: InAppMessage;
   /** The composed campaign URL. Built by the SDK from state it already holds. */
@@ -41,7 +43,9 @@ interface Props {
   /** The widget reported the game finished: the customer played it through. */
   onCompleted: () => void;
   topInset?: number;
+  rightInset?: number;
   bottomInset?: number;
+  leftInset?: number;
 }
 
 const EVENT_PREFIX = 'gb:event:';
@@ -90,8 +94,11 @@ export function WidgetView({
   onDismiss,
   onCompleted,
   topInset = 0,
+  rightInset = 0,
   bottomInset = 0,
+  leftInset = 0,
 }: Props): React.ReactElement {
+  const { height } = useWindowDimensions();
   const [ready, setReady] = useState(false);
   const settled = useRef(false);
 
@@ -193,11 +200,17 @@ export function WidgetView({
   );
 
   // The widget's page draws no way out of a game on mobile, so the SDK draws one: at the top end,
-  // over the game — on the card for a modal, and for a full screen clear of the notch by the top
-  // inset. It closes the game as Android's back button does, and so reports nothing either.
+  // over the game — on the card for a modal, and for a full screen in the safe area's corner, past
+  // the top inset and the inset at the side the layout ends on (the left, under RTL). It closes
+  // the game as Android's back button does, and so reports nothing either.
   const inset = fullscreen
     ? FullscreenMetrics.closeInset
     : ModalMetrics.closeInset;
+  const endInset = fullscreen
+    ? I18nManager.isRTL
+      ? leftInset
+      : rightInset
+    : 0;
   const close = (
     <CloseGlyph
       accessibilityLabel="Close"
@@ -206,9 +219,18 @@ export function WidgetView({
       onPress={onDismiss}
       style={{
         top: (fullscreen ? topInset : 0) + inset,
-        ...closeInlineEnd(inset),
+        ...closeInlineEnd(inset + endInset),
       }}
     />
+  );
+
+  // Centred on the screen, as every modal is, so the larger of the two insets bounds both ends,
+  // with a message modal's margin past it — the rule the iOS SDK draws by. Turned on its side the
+  // phone is short, and this rather than the width sets the card: a fixed share of the window left
+  // one too short for any of a scratch card's play area to show.
+  const cardMaxHeight = Math.max(
+    0,
+    height - 2 * (Math.max(topInset, bottomInset) + ModalMetrics.margin)
   );
 
   return (
@@ -225,9 +247,15 @@ export function WidgetView({
           ]}
         >
           <View
+            testID="gb-iam-game-frame"
             style={[
               styles.fullBleed,
-              { paddingTop: topInset, paddingBottom: bottomInset },
+              {
+                paddingTop: topInset,
+                paddingRight: rightInset,
+                paddingBottom: bottomInset,
+                paddingLeft: leftInset,
+              },
             ]}
           >
             {webView}
@@ -245,7 +273,10 @@ export function WidgetView({
             style={[StyleSheet.absoluteFill, styles.scrim]}
             onPress={onDismiss}
           />
-          <View testID="gb-iam-game-card" style={styles.card}>
+          <View
+            testID="gb-iam-game-card"
+            style={[styles.card, { maxHeight: cardMaxHeight }]}
+          >
             {webView}
             {close}
           </View>
@@ -264,7 +295,6 @@ const styles = StyleSheet.create({
     width: '86%',
     maxWidth: 420,
     aspectRatio: WIDGET_ASPECT_RATIO,
-    maxHeight: `${WIDGET_MAX_HEIGHT_FRACTION * 100}%`,
     borderRadius: 16,
     overflow: 'hidden',
   },
