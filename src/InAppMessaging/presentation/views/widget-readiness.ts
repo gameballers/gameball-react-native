@@ -22,6 +22,12 @@
  *
  * The stability count is a secondary check, not the safeguard — no value of it can tell loading
  * from loaded when the loading state holds still for a second.
+ *
+ * **The fallback, not the first word.** A widget that posts `gameReady` says itself when the game
+ * is on screen, and whichever comes first settles the view. This guess is for widgets that predate
+ * that event, and it can miss: a game drawn on a canvas with under 40 characters of text — an
+ * Arabic scratch card with no Arabic title, measured at `6/323/2/0/36` — never passes it. The
+ * script also installs the `WidgetEvent` shim that event arrives through.
  */
 export const READINESS_SCRIPT = `
 (function () {

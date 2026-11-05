@@ -47,18 +47,23 @@ interface Props {
 const EVENT_PREFIX = 'gb:event:';
 
 /**
- * The type of an event the widget posted, or null when this cannot read one.
+ * An event the widget posted, or null when this cannot read one.
  *
- * Only the type is read. The rest names the challenge and the widget's own game type —
- * `spinTheWheel` where the sync says `wheel` — so it is never matched against the sync: an event
- * from this view belongs to the game this view opened.
+ * Of the metadata only `gameReady`'s is read. The rest names the challenge and the widget's own
+ * game type — `spinTheWheel` where the sync says `wheel` — so it is never matched against the
+ * sync: an event from this view belongs to the game this view opened.
  */
-function widgetEventType(raw: string): string | null {
+function readWidgetEvent(
+  raw: string
+): { type: string; metadata: unknown } | null {
   try {
     const event: unknown = JSON.parse(raw);
     if (typeof event === 'object' && event !== null && !Array.isArray(event)) {
-      const type = (event as { type?: unknown }).type;
-      return typeof type === 'string' ? type : null;
+      const { type, metadata } = event as {
+        type?: unknown;
+        metadata?: unknown;
+      };
+      return typeof type === 'string' ? { type, metadata } : null;
     }
   } catch {
     // Not JSON: nothing this view acts on.
@@ -72,6 +77,10 @@ function widgetEventType(raw: string): string | null {
  * The page finishes navigating two to three seconds before the campaign exists — the widget
  * renders after its own fetches resolve — so showing on load alone puts a skeleton in front of the
  * customer every time.
+ *
+ * The widget says itself when the page is on screen, with a `gameReady` event, and whether the
+ * game can be played. The readiness script's guess stays as the fallback for widgets that predate
+ * that event; whichever comes first settles the view.
  */
 export function WidgetView({
   message,
@@ -86,8 +95,12 @@ export function WidgetView({
   const [ready, setReady] = useState(false);
   const settled = useRef(false);
 
+  /**
+   * Settles exactly once. `failure` says why a game is taken away when it is not that the widget
+   * ran out of time.
+   */
   const settle = useCallback(
-    (isReady: boolean) => {
+    (isReady: boolean, failure?: string) => {
       if (settled.current) return;
       settled.current = true;
 
@@ -97,7 +110,11 @@ export function WidgetView({
         return;
       }
       iamLog(
-        `widget did not become ready within ${READY_TIMEOUT_MS / 1000}s; taking the message away unshown`
+        failure !== undefined
+          ? `widget ${failure}; taking the message away unshown`
+          : `widget did not become ready within ${
+              READY_TIMEOUT_MS / 1000
+            }s; taking the message away unshown`
       );
       // onShown was never called, so no impression is logged and the frequency cap is untouched —
       // the campaign gets another go at its next trigger rather than being burned by a slow
@@ -111,6 +128,26 @@ export function WidgetView({
     const timer = setTimeout(() => settle(false), READY_TIMEOUT_MS);
     return () => clearTimeout(timer);
   }, [settle]);
+
+  /**
+   * Settles on the widget's word that the page it opened is on screen. Only an explicit
+   * `playable: false` holds the game back: the page is then the widget's "already played today",
+   * "not available" or error screen, and that is all the customer would see.
+   */
+  const pageIsReady = useCallback(
+    (metadata: unknown) => {
+      const said = (
+        typeof metadata === 'object' && metadata !== null ? metadata : {}
+      ) as { playable?: unknown; reason?: unknown };
+      if (said.playable !== false) {
+        settle(true);
+        return;
+      }
+      const reason = String(said.reason ?? 'no reason given');
+      settle(false, `says the game cannot be played now (${reason})`);
+    },
+    [settle]
+  );
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -130,12 +167,15 @@ export function WidgetView({
       if (raw.startsWith(EVENT_PREFIX)) {
         const event = raw.slice(EVENT_PREFIX.length);
         iamLog(`game:${message.widget?.gameCampaignId ?? 0} reported ${event}`);
-        if (widgetEventType(event) === 'gameCompleted') {
+        const said = readWidgetEvent(event);
+        if (said?.type === 'gameReady') {
+          pageIsReady(said.metadata);
+        } else if (said?.type === 'gameCompleted') {
           onCompleted();
         }
       }
     },
-    [settle, onDismiss, onCompleted, message.widget]
+    [settle, pageIsReady, onDismiss, onCompleted, message.widget]
   );
 
   const fullscreen = message.type === 'fullscreen';

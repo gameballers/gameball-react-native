@@ -740,4 +740,100 @@ describe('games', () => {
     expect(calls.log).toEqual(['shown']);
     unmount(tree);
   });
+
+  /** What the widget posts once the page it opened is on screen, saying whether it can be played. */
+  function gameReady(metadata?: unknown): string {
+    return (
+      'gb:event:' +
+      JSON.stringify(
+        metadata === undefined
+          ? { type: 'gameReady' }
+          : { type: 'gameReady', metadata }
+      )
+    );
+  }
+
+  it('shows a game the moment the widget says it is on screen', () => {
+    // The widget's own word, ahead of the readiness guess, which can miss a drawn game: an Arabic
+    // scratch card with no Arabic title has 36 characters of text and no image, and never passed.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady({ page: 'details', playable: true })));
+
+    expect(calls.log).toEqual(['shown']);
+    expect(stage(tree)).toEqual(REVEALED);
+    unmount(tree);
+  });
+
+  it('takes a game the widget says cannot be played away, never having shown it', () => {
+    // Already played today, not available, or the widget's own error screen: that page is all the
+    // customer would see.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() =>
+      post(
+        tree,
+        gameReady({ page: 'details', playable: false, reason: 'unplayable' })
+      )
+    );
+
+    expect(calls.log).toEqual(['dismissed']);
+    expect(presenter.isShowing).toBe(false);
+    unmount(tree);
+  });
+
+  it.each([
+    ['the page and nothing more', { page: 'details' }],
+    ['no metadata', undefined],
+    ['metadata it cannot read', 'details'],
+  ])('shows a game the widget says is on screen with %s', (_, metadata) => {
+    // Only an explicit "cannot be played" holds a game back.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady(metadata)));
+
+    expect(calls.log).toEqual(['shown']);
+    unmount(tree);
+  });
+
+  it("stands by the widget's first word", () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady({ page: 'details', playable: true })));
+    act(() =>
+      post(
+        tree,
+        gameReady({ page: 'details', playable: false, reason: 'error' })
+      )
+    );
+    act(() => post(tree, 'gb:timeout'));
+
+    expect(calls.log).toEqual(['shown']);
+    expect(presenter.isShowing).toBe(true);
+    unmount(tree);
+  });
 });
