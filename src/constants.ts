@@ -12,7 +12,9 @@ export const API_ENDPOINTS = {
   INTEGRATIONS: '/api/v4.0/integrations',
   CUSTOMERS: '/customers',
   EVENTS: '/events',
-  PUSH_CLICK: '/mobile/push-click',
+  // Taps, swipe-aways and influenced opens of Gameball pushes. A full path, pinned to v4.0 like
+  // the native SDKs: a backend without it answers 404 rather than counting a swipe-away as a click.
+  PUSH_ENGAGEMENT: '/api/v4.0/integrations/mobile/push-engagement',
   MOBILE_LOGS: '/mobile/logs',
 } as const;
 
@@ -42,6 +44,7 @@ export const STORAGE_KEYS = {
   INSTALL_ID: 'gameball_install_id',
   CUSTOMER_ID: 'gameball_customer_id',
   CUSTOMER_PREFERRED_LANGUAGE: 'gameball_customer_preferred_language',
+  RECEIVED_PUSHES: 'gameball_received_pushes',
 } as const;
 
 // Default Values
