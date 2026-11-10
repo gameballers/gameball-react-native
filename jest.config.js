@@ -29,7 +29,13 @@ module.exports = {
       displayName: 'native',
       rootDir: __dirname,
       preset: '@react-native/jest-preset',
-      testMatch: ['<rootDir>/src/**/__tests__/**/*.test.tsx'],
+      // Push engagement's suites are .ts but drive GameballApp, which needs React Native's setup;
+      // they only use synchronous fake timers, so the timer caveat above doesn't bite them.
+      testMatch: [
+        '<rootDir>/src/**/__tests__/**/*.test.tsx',
+        '<rootDir>/src/Engagement/__tests__/**/*.test.ts',
+        '<rootDir>/src/__tests__/**/*.test.ts',
+      ],
       modulePathIgnorePatterns: ignore,
       moduleNameMapper: {
         // The real one reaches for a native module through TurboModuleRegistry.getEnforcing,
