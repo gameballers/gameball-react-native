@@ -266,7 +266,8 @@ The SDK provides the following public methods:
 - `showProfile(request)` - Display profile widget
 - `hideProfile()` - Dismiss the profile widget
 - `setLanguage(lang)` - Change SDK language at runtime
-- `handlePushClick(payload, callback?)` - Report a push notification tap
+- `handlePushClick(payload, callback?)` - Report a push notification tap (each tap counts once per app run)
+- `handlePushReceived(payload, sentTime?)` - Tell the SDK a push arrived, for influenced opens; works before `init`
 - `changeLanguage(language)` - Change SDK language (deprecated, use `setLanguage`)
 - `getReferralCode(url)` - Extract referral code from URL
 - `logPurchase(purchase, callback?, sessionToken?)` - Report a purchase, which in-app messaging campaigns can target and filter on (v4.0.0+)
@@ -322,6 +323,32 @@ messaging().onNotificationOpenedApp((remoteMessage) => {
   });
 });
 ```
+
+### Push Arrivals and App Opens
+
+After `init`, the SDK notices app opens on its own: the first open is `cold`, and coming back after more than 30 seconds in the background is `warm`. An open within 30 minutes of a Gameball push the customer didn't tap counts as an open the push influenced, and is reported to Gameball. For that, the SDK needs to know when pushes arrive — pass them to `handlePushReceived`:
+
+```typescript
+// index.js, before AppRegistry.registerComponent
+import messaging from '@react-native-firebase/messaging';
+import GameballApp from 'react-native-gameball';
+
+messaging().setBackgroundMessageHandler((remoteMessage) =>
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime)
+);
+
+// In the app, alongside your tap handling
+messaging().onMessage((remoteMessage) => {
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime);
+});
+messaging()
+  .getInitialNotification()
+  .then((remoteMessage) => {
+    if (remoteMessage) GameballApp.getInstance().handlePushClick(remoteMessage.data);
+  });
+```
+
+`handlePushReceived` ignores pushes that aren't Gameball's and needs nothing but AsyncStorage, so it works in the background handler before `init`. An open caused by tapping a Gameball push is a click, never an influenced open; pass taps to `handlePushClick` as above, soon after the app opens. On iOS, `setBackgroundMessageHandler` only runs for pushes sent with `content-available`.
 
 ### Per-Request Session Token Override (v3.1.0+)
 

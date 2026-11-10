@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DeviceInfo from 'react-native-device-info';
 import GameballWidget from './GameballWidget';
@@ -19,6 +19,13 @@ import { inAppMessaging } from './InAppMessaging';
 import type { StartInAppMessagingOptions } from './InAppMessaging';
 import type { InAppMessage } from './InAppMessaging/models/message';
 import { PURCHASE_EVENT_NAME } from './InAppMessaging/models/trigger';
+import { Engagement, isGameballPush } from './Engagement/engagement';
+import { InfluencedOpens } from './Engagement/influenced-opens';
+import { AsyncStorageReceivedPushes } from './Engagement/received-pushes-storage';
+import {
+  PushEngagementType,
+  pushEngagementBody,
+} from './Engagement/push-engagement';
 
 const package_json = require('../package.json');
 
@@ -47,6 +54,14 @@ export class GameballApp {
   private readonly sdkVersion = package_json.version;
   private readonly os = Platform.OS;
   private readonly userAgent = `GB/react-native/${package_json.version}`;
+
+  // Push taps, app opens, push arrivals and influenced opens. Storage only, so arrivals
+  // can be saved from a headless background task before init.
+  private readonly engagement = new Engagement({
+    influenced: new InfluencedOpens(new AsyncStorageReceivedPushes()),
+    // Influenced opens are only decided after init, so the request has its configuration
+    report: (body) => this.makeRequest(API_ENDPOINTS.PUSH_ENGAGEMENT, body),
+  });
 
   private constructor() {}
 
@@ -103,6 +118,10 @@ export class GameballApp {
 
       this.isInitialized = true;
 
+      // App opens are watched from here on; a second init is ignored. Started once ready, so
+      // the app's own tap handling, which usually waits for init, follows soon after an open.
+      this.engagement.start(AppState);
+
       GameballLogger.configure({
         apiKey: this.apiKey,
         baseUrl: this.config?.apiPrefix || API_ENDPOINTS.BASE_URL,
@@ -146,6 +165,14 @@ export class GameballApp {
 
       // Validate the request - any validation errors will be caught and trigger callback
       this.validateCustomerRequest(request);
+
+      // Another customer's pushes must never credit this customer's opens
+      const previousCustomerId = await AsyncStorage.getItem(
+        STORAGE_KEYS.CUSTOMER_ID
+      ).catch(() => null);
+      if (previousCustomerId !== request.customerId) {
+        await this.engagement.clearReceived();
+      }
 
       AsyncStorage.setItem(STORAGE_KEYS.CUSTOMER_ID, request.customerId).catch(
         () => {}
@@ -275,6 +302,8 @@ export class GameballApp {
    *
    * When the notification is a Gameball one and carries a click token, the tap is reported
    * to Gameball to count the campaign click; the optional callback receives that report's result.
+   * Each tap counts once per app run, so passing the same notification from both
+   * `getInitialNotification` and `onNotificationOpenedApp` is safe.
    * @param payload - The notification's data payload
    * @param callback - Optional callback receiving whether the report succeeded
    * @param sessionToken - Optional session token for this request.
@@ -287,17 +316,26 @@ export class GameballApp {
     callback?: Callback<boolean>,
     sessionToken?: string | null
   ): boolean {
-    if (String(payload?.isGB).toLowerCase() !== 'true') {
+    if (!isGameballPush(payload)) {
       return false;
     }
 
-    const token = payload?.gbClickToken;
+    const token = payload.gbClickToken;
 
     // Override or clear sessionToken - always update on every call
     this.sessionToken = sessionToken || null;
 
     if (!this.isInitialized) {
+      // Not counted yet, so a call after init still reports it; but the tap still opened
+      // the app, and a tapped push is never an influenced open
+      this.engagement.onTapBeforeReady(payload);
       callback?.onError?.(new Error(ERROR_MESSAGES.NOT_INITIALIZED));
+      return true;
+    }
+
+    // Counted once per app run
+    if (!this.engagement.onTap(payload)) {
+      callback?.onSuccess?.(true);
       return true;
     }
 
@@ -305,7 +343,10 @@ export class GameballApp {
       return true;
     }
 
-    this.makeRequest(API_ENDPOINTS.PUSH_CLICK, { clickToken: token }).then(
+    this.makeRequest(
+      API_ENDPOINTS.PUSH_ENGAGEMENT,
+      pushEngagementBody(token, PushEngagementType.Clicked, Date.now())
+    ).then(
       () => callback?.onSuccess?.(true),
       (error) =>
         callback?.onError?.(
@@ -315,6 +356,30 @@ export class GameballApp {
         )
     );
     return true;
+  }
+
+  /**
+   * Tell the SDK a push arrived, so an app open soon after it can be credited to it.
+   * Call it from RNFirebase's `setBackgroundMessageHandler` and `onMessage` with the message's
+   * data and sent time, and await it in the background handler:
+   *
+   * ```ts
+   * messaging().setBackgroundMessageHandler((message) =>
+   *   GameballApp.getInstance().handlePushReceived(message.data, message.sentTime)
+   * );
+   * ```
+   *
+   * Works before `init` (the background handler often runs without the app's UI). Other
+   * pushes are ignored.
+   * @param payload - The message's data payload (`remoteMessage.data`)
+   * @param sentTime - When the push was sent, in milliseconds (`remoteMessage.sentTime`)
+   * @returns true when the notification is a Gameball one
+   */
+  handlePushReceived(
+    payload: Record<string, any> | null | undefined,
+    sentTime?: number | null
+  ): Promise<boolean> {
+    return this.engagement.onReceived(payload, sentTime).catch(() => false);
   }
 
   /**
@@ -569,7 +634,9 @@ export class GameballApp {
     const baseUrl = this.config?.apiPrefix || API_ENDPOINTS.BASE_URL;
     let url: string;
 
-    if (endpoint === API_ENDPOINTS.BOT_SETTINGS) {
+    // A full path (bot settings on v1.0, push engagement pinned to v4.0) is used as it is; the
+    // rest follow the session token to v4.0 or v4.1
+    if (endpoint.startsWith('/api/')) {
       url = `${baseUrl}${endpoint}`;
     } else {
       const apiVersion = this.sessionToken
