@@ -145,7 +145,7 @@ describe('parseSyncResponse rules', () => {
       ).campaigns
     ).toEqual([]);
   });
-  it('drops unsupported contentMode, trigger type, OR logic and a filter without a name', () => {
+  it('drops unsupported contentMode, trigger type, logical operator and a filter without a name', () => {
     expect(
       parseSyncResponse(payload([campaign({ contentMode: 'html' })])).campaigns
     ).toEqual([]);
@@ -160,7 +160,7 @@ describe('parseSyncResponse rules', () => {
             trigger: {
               type: 'event',
               name: 'e',
-              metadataLogicalOperator: 'or',
+              metadataLogicalOperator: 'xor',
               metadataFilters: [],
             },
           }),
@@ -180,6 +180,71 @@ describe('parseSyncResponse rules', () => {
         ])
       ).campaigns
     ).toEqual([]);
+  });
+  it.each(['Or', 'OR', 'or'])(
+    'reads %s as "any of the conditions", with the operators the dashboard sends',
+    (logical) => {
+      const r = parseSyncResponse(
+        payload([
+          campaign({
+            trigger: {
+              type: 'event',
+              name: 'add_to_cart',
+              metadataLogicalOperator: logical,
+              metadataFilters: [
+                { name: 'price', operator: 'GreaterThanOrEqual', value: 100 },
+                { name: 'category', operator: 'NotEquals', value: 'bags' },
+              ],
+            },
+          }),
+        ])
+      );
+      expect(r.campaigns[0]!.trigger).toEqual({
+        kind: 'event',
+        eventName: 'add_to_cart',
+        filters: [
+          { property: 'price', operator: 'greater_than_or_equal', value: 100 },
+          { property: 'category', operator: 'not_equals', value: 'bags' },
+        ],
+        match: 'any',
+      });
+    }
+  );
+  it('drops an "any" campaign none of whose conditions can be read, rather than show it on every event', () => {
+    // Under "all", an unreadable condition dropped only loosens the campaign by that condition.
+    // Under "any", dropping every one leaves no condition at all — which matches every event.
+    expect(
+      parseSyncResponse(
+        payload([
+          campaign({
+            trigger: {
+              type: 'event',
+              name: 'add_to_cart',
+              metadataLogicalOperator: 'Or',
+              metadataFilters: [
+                { name: 'category', operator: 'Regex', value: 'x' },
+                { name: 'qty', operator: 'Greater', value: null },
+              ],
+            },
+          }),
+        ])
+      ).campaigns
+    ).toEqual([]);
+  });
+  it('keeps an "any" campaign that names no conditions: the event alone triggers it', () => {
+    const r = parseSyncResponse(
+      payload([
+        campaign({
+          trigger: {
+            type: 'event',
+            name: 'add_to_cart',
+            metadataLogicalOperator: 'Or',
+            metadataFilters: [],
+          },
+        }),
+      ])
+    );
+    expect(r.campaigns).toHaveLength(1);
   });
   it('keeps an event trigger with dashboard-named filters and drops only an unusable filter', () => {
     const r = parseSyncResponse(

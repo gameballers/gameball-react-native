@@ -1,11 +1,24 @@
-import { allFiltersMatch, type PropertyFilter } from './property-filter';
+import {
+  allFiltersMatch,
+  anyFilterMatches,
+  type PropertyFilter,
+} from './property-filter';
 
 /** Reserved event name a purchase is reported under. */
 export const PURCHASE_EVENT_NAME = 'purchase';
 
 export type MessageTrigger =
   | { kind: 'session_start' }
-  | { kind: 'event'; eventName: string; filters: PropertyFilter[] };
+  | {
+      kind: 'event';
+      eventName: string;
+      filters: PropertyFilter[];
+      /**
+       * `any` when the campaign was authored on "any" of its conditions (`metadataLogicalOperator`
+       * OR): one passing filter is enough. Absent, every filter must pass.
+       */
+      match?: 'any';
+    };
 
 export type TriggerOccurrence =
   | { kind: 'session_start' }
@@ -44,8 +57,8 @@ export function triggerMatches(
   if (declared.kind === 'session_start')
     return occurred.kind === 'session_start';
   if (occurred.kind !== 'event') return false;
-  return (
-    declared.eventName === occurred.eventName &&
-    allFiltersMatch(declared.filters, occurred.properties)
-  );
+  if (declared.eventName !== occurred.eventName) return false;
+  return declared.match === 'any'
+    ? anyFilterMatches(declared.filters, occurred.properties)
+    : allFiltersMatch(declared.filters, occurred.properties);
 }
