@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  I18nManager,
   Image,
   Pressable,
   ScrollView,
@@ -38,7 +39,9 @@ export function FullscreenView({
   onPress,
   onDismiss,
   topInset,
+  rightInset = 0,
   bottomInset,
+  leftInset = 0,
 }: {
   message: InAppMessage;
   artwork: MessageArtwork;
@@ -48,7 +51,9 @@ export function FullscreenView({
   onPress: (button: MessageButton | null) => void;
   onDismiss: () => void;
   topInset: number;
+  rightInset?: number;
   bottomInset: number;
+  leftInset?: number;
 }) {
   const image = artwork.image;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -68,6 +73,8 @@ export function FullscreenView({
     }).start();
   }, [revealed, opacity]);
   const imageOnly = message.layout === 'image_only' && image !== null;
+  /** The side the layout ends on, where the close button sits: the right, or the left under RTL. */
+  const endInset = I18nManager.isRTL ? leftInset : rightInset;
 
   const buttons = message.buttons.map((button, index) => (
     <MessageActionButton
@@ -109,7 +116,9 @@ export function FullscreenView({
             {
               opacity,
               paddingTop: imageOnly ? 0 : topInset,
+              paddingRight: imageOnly ? 0 : rightInset,
               paddingBottom: imageOnly ? 0 : bottomInset,
+              paddingLeft: imageOnly ? 0 : leftInset,
               backgroundColor:
                 message.style.backgroundColor ?? MessageMetrics.defaultSurface,
             },
@@ -187,8 +196,12 @@ export function FullscreenView({
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  paddingHorizontal:
-                    FullscreenMetrics.imageOnlyButtonsPadding.horizontal,
+                  paddingLeft:
+                    FullscreenMetrics.imageOnlyButtonsPadding.horizontal +
+                    leftInset,
+                  paddingRight:
+                    FullscreenMetrics.imageOnlyButtonsPadding.horizontal +
+                    rightInset,
                   paddingBottom:
                     FullscreenMetrics.imageOnlyButtonsPadding.bottom +
                     bottomInset,
@@ -209,7 +222,7 @@ export function FullscreenView({
                 top: FullscreenMetrics.closeInset + topInset,
                 // Mirrored by hand: React Native does not flip a physical `right` under RTL, and the
                 // web SDK places this with `inset-inline-end`, which does.
-                ...closeInlineEnd(FullscreenMetrics.closeInset),
+                ...closeInlineEnd(FullscreenMetrics.closeInset + endInset),
               }}
             />
           ) : null}
