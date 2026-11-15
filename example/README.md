@@ -1,6 +1,6 @@
 # Gameball React Native SDK - Example App
 
-This example demonstrates how to integrate and use the Gameball React Native SDK v4.0.0 in a React Native application.
+This example demonstrates how to integrate and use the Gameball React Native SDK v4.1.0 in a React Native application.
 
 ## Features Demonstrated
 
@@ -12,6 +12,8 @@ This example demonstrates how to integrate and use the Gameball React Native SDK
 - 🆕 **Guest Mode** - Show profile widget without customer authentication (v3.1.1+)
 - 💬 **In-App Messaging** - Display dashboard campaigns with `startInAppMessaging` on `<GameballInAppMessages />`, observe them with `onInAppMessage` and stop on logout (v4.0.0+)
 - 🛒 **Purchase Logging** - Send purchase events with `logPurchase` for purchase-triggered campaigns (v4.0.0+)
+- 🎡 **Game Campaigns** - Games open over the app through `startInAppMessaging`, with nothing more to integrate (v4.1.0+)
+- 📣 **Push Taps and Influenced Opens** - `handlePushClick` and `handlePushReceived` with RNFirebase, shown commented in `src/App.tsx` (v4.1.0+, influenced opens on Android)
 
 ## Getting Started
 

@@ -4,6 +4,45 @@ All notable changes to Gameball React Native SDK are documented here.
 
 ---
 
+## [4.1.0] - 2026-11-19 📱
+
+> **Minor Release**: Game campaigns — a reward campaign opens itself over your app from an in-app trigger — and influenced opens of Gameball pushes
+
+### ✨ Added
+- 📣 **Influenced Opens**: new `handlePushReceived(payload, sentTime?)`, called with `remoteMessage.data` and `remoteMessage.sentTime` from RNFirebase's `setBackgroundMessageHandler` and `onMessage`, saves each Gameball push as it arrives, in AsyncStorage. It works before `init`, so it runs in the background handler. An app open that no tap caused, within 30 minutes of an untapped push arriving, is reported as an open that push influenced, decided about 10 seconds after the open so a late tap still wins. Android only: on iOS, JavaScript doesn't run for alert pushes that arrive in the background
+- 📣 **App Opens**: from `init` on, the SDK watches `AppState` for the opens that influenced opens are measured against: the first is cold, and a return after more than 30 seconds in the background is warm
+
+- 🎡 **Game campaigns**: a spin the wheel, quiz or scratch and win the merchant set to open over your app arrives in the same sync as in-app messages and draws on the same surface. **Nothing to integrate** — a host already mounting `<GameballInAppMessages />` and starting messaging gets them. `showProfile` never has to be called first: a game opens with in-app messaging's own configuration — the api key, language, session token and widget host given to `init` — for the customer messaging runs for
+- 🧩 **The campaign is the content**: the SDK opens the game itself and shows the card only once it has finished drawing, so the customer never sees a loading state
+- 🖥️ **Modal and fullscreen**: fullscreen insets its content into the safe area while the surface behind runs edge to edge
+- ✖️ **A close button over every game**: the widget's page shows no way out of a game on mobile, so the SDK draws one at the top end — on the card of a modal game, below the notch on a fullscreen one — with a 48pt target and the accessibility label "Close". A tap on the dimmed app around a modal game closes it too, and Android's back button closes either kind
+- 🎯 **After a play, a game waits for the next sync**: once the customer finishes a game, it is not offered again until the next successful sync, which is where Gameball says whether they can still play it. A game closed without being played is offered again as its frequency allows
+- 🔀 **"Any" conditions**: a campaign whose event conditions are joined with "Any" (`OR`) shows when at least one of them matches — messages and games alike. Such campaigns were skipped before. One none of whose conditions this SDK can read is still skipped, rather than shown on every event
+- 🌐 **`widgetUrlPrefix` on `GameballConfig`**: sets the widget host once, for the profile widget and for every game a message opens. `ShowProfileRequest.widgetUrlPrefix` still overrides it for one presentation
+- 🛡️ **Unknown kinds are skipped, never guessed at.** An entry whose `campaignType` or game type this version does not recognise is dropped with a log naming it, so a future kind degrades to silence rather than to a wrong display
+
+### 🔄 Changed
+- 📣 **Push Tap Reporting**: `handlePushClick(payload, callback?)` now reports to the `push-engagement` endpoint, which replaces `push-click`, and counts a tap once per app run (by `gbClickToken`, else the message id): a repeat reports nothing. A tap handed over before `init` is held and reported once `init` is called. Taps and influenced opens are each sent once, with no retry, and stay on v4.0 when a session token is set. An open caused by a Gameball tap is a click, never an influenced open
+- 🔑 **Display history is keyed by campaign kind and id.** Challenge ids and message campaign ids are separate sequences that overlap numerically, and every game entry arrives with `campaignId: 0` — so a bare number can no longer identify a campaign. Histories written by earlier releases are migrated on read; nothing is lost and no campaign re-shows
+- ⏱️ **Games follow the in-app message frequency rules exactly**: once ever unless the campaign is repeatable, then its own minimum interval when it has one, the account-wide cooldown between any two displays, and quiet hours. There is no game-specific delay, interval or dismissal limit
+- 📊 **Game campaigns report no in-app messaging telemetry**, whether shown, played or closed. Engagement is recorded through the normal challenge flow when the customer plays. Their display history is still kept, so a once-ever game stays once-ever
+- 🗂️ **A game opens only from a campaign set this session's sync confirmed** — never from the cached set a failed launch sync falls back to, nor from the last session's set when the sync after a resume fails. A message carries its own content, so it still shows from either; a game carries a pointer and fetches its content live, so an unconfirmed entry is a promise the SDK cannot keep
+- ⏳ **A campaign waiting for the screen is checked again before it shows**: it is dropped if it expired while it waited or the latest sync no longer carries it, and whatever waits is let go when a new session syncs. Two games on one trigger queue like two messages, the second waiting behind the first
+
+### 🐛 Fixed
+- 🔄 **Turning the phone keeps messages and games in the safe area**: the insets were read once at start-up, top and bottom only, so in landscape a fullscreen message or game kept a portrait-sized gap at the top and ran under the Dynamic Island at the sides. They are now measured live on every edge through `react-native-safe-area-context`, and `insets` takes `left` and `right` too. A modal game card is no taller than the safe height less its margins, as on iOS, rather than 70% of the window, which in landscape left a card too short for a scratch card's play area
+- 🔧 **Game End Dates**: a game's end date that the sync sends without a time zone is now read as UTC, as on Android; it used to be read as device-local time, so games ended early or late by the device's UTC offset
+
+### ⚠️ Not yet supported
+- 📱 **Screen triggers do not fire on mobile.** Use a session-start or custom-event trigger. A screen-triggered campaign is skipped with a `[GameballIAM]` log naming it
+- 👋 **Influenced opens on iOS, and swipe-aways.** JavaScript doesn't run for alert pushes that arrive in the background on iOS, so influenced opens are reported on Android only; swipe-aways aren't reported on either platform
+
+### 📝 Notes
+- 🧭 **A game loads out of sight, in `<GameballInAppMessages />`'s own layer, not a native modal.** Your app keeps its taps and its back button while the game draws, and the game takes the screen only once it has drawn. A modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up
+- 🔍 **Diagnosing a game that does not open**: the `[GameballIAM]` log prints the URL each game opens at, with the api key and session token redacted, and names each game as `game:<id>`
+
+---
+
 ## [4.0.0] - 2026-10-23 🎉
 
 > **Major Release**: Raised the minimum supported platform versions to iOS 15.0 and Android API 24, and added in-app messaging — an opt-in module that displays campaigns authored in the Gameball dashboard inside your app

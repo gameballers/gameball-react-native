@@ -40,6 +40,7 @@ function AppContent() {
         shop: "your-shop-id",
         platform: "your-platform-id",
         // sessionToken: "your-session-token" // Optional: Enable secure authentication (v3.1.0+)
+        // widgetUrlPrefix: "{your_widget_host}" // Optional: widget host for a non-production environment (v4.1.0+)
       }
       await gameballApp.init(config)
 
@@ -84,6 +85,8 @@ function AppContent() {
             // Optional: route a campaign's navigate action through your navigator
             // onNavigate: (route, args) => navigation.navigate(route, args),
           })
+          // Game campaigns (v4.1.0+) open over the app on their own trigger through this same call:
+          // nothing more to integrate.
           // On logout - dismisses any message, sends pending analytics and clears state:
           // gameballApp.stopInAppMessaging()
 
@@ -101,6 +104,21 @@ function AppContent() {
               onError: (error) => console.log('Purchase logging error:', error),
             }
           )
+
+          // Push taps (v3.3.1+) - from your notification-tap handlers. As of v4.1.0 a tap counts once,
+          // and one handed over before init is reported once init is called:
+          // messaging().onNotificationOpenedApp((remoteMessage) => {
+          //   gameballApp.handlePushClick(remoteMessage.data)
+          // })
+
+          // Influenced opens (v4.1.0+, Android) - let the SDK see Gameball pushes as they arrive.
+          // It works before init, so the background handler belongs in index.js:
+          // messaging().setBackgroundMessageHandler((remoteMessage) =>
+          //   GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime)
+          // )
+          // messaging().onMessage((remoteMessage) => {
+          //   gameballApp.handlePushReceived(remoteMessage.data, remoteMessage.sentTime)
+          // })
 
           // Mark widget as ready after customer initialization
           const event: Event = {
