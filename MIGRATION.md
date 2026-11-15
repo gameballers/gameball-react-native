@@ -6,12 +6,73 @@ This guide provides migration instructions for upgrading between major versions 
 
 ## Table of Contents
 
+- [v4.0.x → v4.1.0](#migration-guide-v40x--v410)
 - [v3.x → v4.0.0](#migration-guide-v3x--v400)
 - [v3.1.2 → v3.3.1](#migration-guide-v312--v331)
 - [v3.1.1 → v3.1.2](#migration-guide-v311--v312)
 - [v3.1.0 → v3.1.1](#migration-guide-v310--v311)
 - [v3.0.0 → v3.1.0](#migration-guide-v300--v310)
 - [v2.x → v3.0.0](#migration-guide-v2x--v300)
+
+---
+
+## Migration Guide: v4.0.x → v4.1.0
+
+Version 4.1.0 adds game campaigns to in-app messaging, any-condition event triggers, and influenced opens of Gameball pushes on Android. This is a **minor update** with no breaking changes — all v4.0.x code continues to work.
+
+### Overview of Changes
+
+#### ✨ What's New
+- **Game campaigns** - games the merchant set to open over your app arrive with in-app messaging; if you already mount `<GameballInAppMessages />` and call `startInAppMessaging`, there is nothing extra to integrate
+- **Any of the conditions** - a campaign set to match any of its event conditions shows when one of them matches
+- **Influenced opens** - `handlePushReceived(payload, sentTime?)`, called from RNFirebase's `setBackgroundMessageHandler` and `onMessage` (Android)
+- **Push taps counted once** - `handlePushClick` reports to `push-engagement` and counts each tap once, even when handed over before `init`; keep calling it from your notification-tap handlers
+- **Widget host on the configuration** - `GameballConfig.widgetUrlPrefix` for the profile widget and game campaigns
+
+### Update Dependencies
+
+**Before (v4.0.x):**
+```bash
+npm install react-native-gameball@^4.0.0
+```
+
+**After (v4.1.0):**
+```bash
+npm install react-native-gameball@^4.1.0
+```
+
+### Action Required
+
+None. To adopt influenced opens:
+
+### 1. Report Influenced Opens (Optional)
+
+**Before (v4.0.x):** not available.
+
+**After (v4.1.0):**
+```typescript
+// index.js, before AppRegistry.registerComponent
+messaging().setBackgroundMessageHandler((remoteMessage) =>
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime)
+);
+
+// In the app
+messaging().onMessage((remoteMessage) => {
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime);
+});
+```
+
+`handlePushReceived` needs nothing but AsyncStorage, so it works in the background handler before `init`. Influenced opens are reported on Android only. Swipe-aways aren't reported.
+
+### Migration Checklist
+
+#### During Migration
+- [ ] Update `react-native-gameball` to `^4.1.0`
+- [ ] (Optional) Call `handlePushReceived` from `setBackgroundMessageHandler` and `onMessage`
+
+#### Post-Migration
+- [ ] Tap a Gameball push; the console shows `GameballApp engagement push_click` once
+- [ ] If influenced opens are adopted, on Android receive a Gameball push, open the app without tapping it, and look for `GameballApp engagement influenced_open`
 
 ---
 

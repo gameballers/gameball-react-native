@@ -1,6 +1,6 @@
 # Gameball React Native SDK
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
+[![Version](https://img.shields.io/badge/version-4.1.0-blue.svg)](https://github.com/gameballers/gameball-react-native)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![React Native](https://img.shields.io/badge/React%20Native-0.70%2B-blue.svg)](https://reactnative.dev)
 [![npm](https://img.shields.io/npm/v/react-native-gameball.svg)](https://www.npmjs.com/package/react-native-gameball)
@@ -12,7 +12,8 @@ Modern React Native SDK for integrating Gameball's customer engagement and loyal
 - 🎯 **Customer Management** - Initialize and manage customer profiles
 - 📊 **Event Tracking** - Track user actions and behaviors
 - 🎁 **Profile Widget** - Display customer loyalty information
-- 💬 **In-App Messaging** - Show dashboard-authored campaigns in your app, opt-in and additive
+- 💬 **In-App Messaging** - Show dashboard-authored campaigns and games in your app, opt-in and additive
+- 📣 **Push Engagement** - Taps and influenced opens of Gameball pushes
 - 🔧 **Modern Architecture** - Built with React Native best practices
 - 🛡️ **Type Safety** - Full TypeScript support with comprehensive type definitions
 - ⚡ **Promise-based API** - Modern async/await support with optional callbacks
@@ -194,7 +195,7 @@ await GameballApp.getInstance().startInAppMessaging({ customerId: 'customer-123'
 
 Call `stopInAppMessaging()` on logout. It dismisses anything on screen, sends pending analytics and clears state.
 
-If your app uses `react-native-safe-area-context`, messages are placed clear of the notch and the home indicator. To pass your own insets instead: `<GameballInAppMessages insets={useSafeAreaInsets()} />`.
+If your app uses `react-native-safe-area-context`, messages are placed clear of the notch, the Dynamic Island and the home indicator, and follow them when the phone turns. To pass your own insets instead: `<GameballInAppMessages insets={useSafeAreaInsets()} />`; each edge you pass wins over the device's.
 
 ### What triggers a message
 
@@ -209,7 +210,7 @@ await GameballApp.getInstance().sendEvent({
 });
 ```
 
-A campaign on `add_to_cart` can require `productId` to equal `sku-001`, or `price` to be above a number, and so on. A purchase logged through `logPurchase` reaches campaigns as an event named `purchase` whose `productId`, `price`, `currency` and `quantity` are available to filters.
+A campaign on `add_to_cart` can require `productId` to equal `sku-001`, or `price` to be above a number, and so on. Its conditions are joined as the dashboard set them: with "All", every one has to match; with "Any", one is enough. A purchase logged through `logPurchase` reaches campaigns as an event named `purchase` whose `productId`, `price`, `currency` and `quantity` are available to filters.
 
 Whether a matching campaign actually appears also depends on its frequency cap, the minimum interval between any two displays, its expiry and its priority — all set in the dashboard.
 
@@ -257,6 +258,61 @@ Campaign text can contain `{token}` placeholders. Just before a message with pla
 
 Impressions, clicks and dismissals are reported automatically — no integration required. A button tap is reported as a click carrying that button's id. Events are batched and persisted to device storage, so analytics logged just before the app is killed still arrive on the next launch.
 
+### Game campaigns (v4.1.0+)
+
+A campaign the merchant set to open itself over your app — a spin the wheel, a quiz, a scratch and
+win. It arrives in the same sync as in-app messages and draws on the same surface, so **there is
+nothing extra to integrate**: if you already mount `<GameballInAppMessages />` and start messaging,
+game campaigns work. You never need to call `showProfile` first: a game opens with in-app
+messaging's own configuration — the api key, language, session token and widget host you gave
+`init` — for the customer messaging runs for.
+
+The campaign *is* the content. There is no headline or button to style — the SDK opens the game
+itself over your app, and shows it only once the game has finished drawing, so your customer never
+sees a loading state.
+
+While a game loads, your app stays fully usable: it loads out of sight in
+`<GameballInAppMessages />`'s own layer, not a native modal, and takes the screen only once it has
+drawn. That layer lives in your view tree, so mount it after your navigator as shown above — and a
+modal your app presents natively sits above it: call `setOverlayOpen(true)` while yours is up.
+
+A game campaign can be authored as a modal — a card over the dimmed app — or fullscreen. Fullscreen
+insets its content into the safe area, so the campaign's own controls stay clear of the notch and
+the home indicator.
+
+**Closing a game.** The game's page shows no way out on mobile, so the SDK draws a close button at
+the top end of every game — on the card of a modal game, below the notch on a fullscreen one —
+labelled "Close" for screen readers. A tap on the dimmed app around a modal game closes it too, and
+Android's back button closes either kind.
+
+**How often a game opens** follows exactly the rules for in-app messages: once ever unless the
+campaign is repeatable, then no sooner than its own minimum interval when it has one; never within
+the account's cooldown since any message or game was last shown; never during quiet hours. There is
+no game-specific delay, interval or dismissal limit.
+
+**After a play**, a game the customer finished is not offered again until the next successful sync,
+which is where Gameball says whether they can still play it. A game closed without being played is
+offered again as its frequency allows.
+
+**Conditions.** A game on a custom event filters its metadata just as a message does, with "All"
+or "Any" of its conditions.
+
+A game opens only from a sync that succeeded in the current session. When a sync fails, the SDK
+keeps showing messages from the campaigns it already has — they carry their own content — but opens
+no game from them, since the campaign may have ended in the meantime.
+
+Requires `react-native-webview`, which the SDK lists as a peer dependency for the profile widget.
+To test against a non-production environment, set `widgetUrlPrefix` on the configuration you pass
+`init`; it applies to the profile widget and to every game.
+
+One limit in this release: **screen triggers do not fire on mobile.** Use a session-start or
+custom-event trigger instead. A screen-triggered campaign is skipped with a `[GameballIAM]` log
+naming it, so one that does not appear can be diagnosed from the console. The same log prints the
+URL each game opens at, with the api key and session token redacted.
+
+Game campaigns report no in-app messaging telemetry, whether shown, played or closed — engagement is
+recorded through the normal challenge flow when the customer plays.
+
 ## API Methods
 
 The SDK provides the following public methods:
@@ -266,7 +322,8 @@ The SDK provides the following public methods:
 - `showProfile(request)` - Display profile widget
 - `hideProfile()` - Dismiss the profile widget
 - `setLanguage(lang)` - Change SDK language at runtime
-- `handlePushClick(payload, callback?)` - Report a push notification tap
+- `handlePushClick(payload, callback?)` - Report a push notification tap; a tap counts once per app run (v4.1.0+)
+- `handlePushReceived(payload, sentTime?)` - Tell the SDK a push arrived, for influenced opens; works before `init` (v4.1.0+)
 - `changeLanguage(language)` - Change SDK language (deprecated, use `setLanguage`)
 - `getReferralCode(url)` - Extract referral code from URL
 - `logPurchase(purchase, callback?, sessionToken?)` - Report a purchase, which in-app messaging campaigns can target and filter on (v4.0.0+)
@@ -313,7 +370,7 @@ gameballApp.hideProfile();
 
 ### Push Click Tracking (v3.3.1+)
 
-Call `handlePushClick` from your notification tap handler with the notification's data payload. It returns `true` for Gameball notifications and reports the tap so the campaign click is counted.
+Call `handlePushClick` from your notification tap handler with the notification's data payload. It returns `true` for Gameball notifications and reports the tap so the campaign click is counted. As of v4.1.0, a tap is counted once per app run (by `gbClickToken`, else the message id), so a repeat reports nothing.
 
 ```typescript
 messaging().onNotificationOpenedApp((remoteMessage) => {
@@ -322,6 +379,32 @@ messaging().onNotificationOpenedApp((remoteMessage) => {
   });
 });
 ```
+
+### Influenced Opens (v4.1.0+)
+
+After `init`, the SDK notices app opens on its own: the first open is `cold`, and coming back after more than 30 seconds in the background is `warm`. An open within 30 minutes of a Gameball push the customer didn't tap counts as an open the push influenced, and is reported to Gameball. For that, the SDK needs to know when pushes arrive — pass them to `handlePushReceived`:
+
+```typescript
+// index.js, before AppRegistry.registerComponent
+import messaging from '@react-native-firebase/messaging';
+import GameballApp from 'react-native-gameball';
+
+messaging().setBackgroundMessageHandler((remoteMessage) =>
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime)
+);
+
+// In the app, alongside your tap handling
+messaging().onMessage((remoteMessage) => {
+  GameballApp.getInstance().handlePushReceived(remoteMessage.data, remoteMessage.sentTime);
+});
+messaging()
+  .getInitialNotification()
+  .then((remoteMessage) => {
+    if (remoteMessage) GameballApp.getInstance().handlePushClick(remoteMessage.data);
+  });
+```
+
+`handlePushReceived` ignores pushes that aren't Gameball's and needs nothing but AsyncStorage, so it works in the background handler before `init`. An open caused by tapping a Gameball push is a click, never an influenced open; pass taps to `handlePushClick` as above, soon after the app opens. A tap passed in before `init` is held and reported once `init` is called, so there's no need to wait for `init` first. On iOS, `setBackgroundMessageHandler` only runs for pushes sent with `content-available`, and JavaScript doesn't run for alert pushes that arrive in the background, so influenced opens are reported on Android only. Taps and influenced opens are each sent once, with no retry, to the v4.0 endpoint even when a session token is set. Swipe-aways aren't reported.
 
 ### Per-Request Session Token Override (v3.1.0+)
 
@@ -407,6 +490,8 @@ const request = {
 };
 ```
 
+To count taps on Gameball pushes, see [Push Click Tracking](#push-click-tracking-v331); to report influenced opens, see [Influenced Opens](#influenced-opens-v410).
+
 ### Error Handling
 ```typescript
 import { GameballApp } from 'react-native-gameball';
@@ -453,8 +538,9 @@ GameballApp.getInstance().initializeCustomer(request, {
 | `lang` | string | ✅ | Language code ('en' or 'ar') |
 | `shop` | string | ❌ | Shop identifier |
 | `platform` | string | ❌ | Platform identifier |
-| `sessionToken` | string | ❌ | Session Token for secure authentication (enables automatic v4.1 endpoint routing) |
+| `sessionToken` | string | ❌ | Session Token for secure authentication (enables automatic v4.1 endpoint routing; push engagement stays on v4.0) |
 | `apiPrefix` | string | ❌ | Custom API base URL |
+| `widgetUrlPrefix` | string | ❌ | Custom widget host, for the profile widget and every game campaign. `ShowProfileRequest.widgetUrlPrefix` overrides it for one presentation. Production when omitted (v4.1.0+) |
 | `debug` | boolean | ❌ | In-app messaging console logs, prefixed `[GameballIAM]`. Defaults to `__DEV__` (v4.0.0+) |
 
 ### InitializeCustomerRequest
@@ -535,7 +621,7 @@ The component in-app messages are drawn on (v4.0.0+). Mount it once, near the ro
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `insets` | { top?: number; bottom?: number } | ❌ | Safe-area insets. Read from `react-native-safe-area-context` when installed; otherwise the status-bar height on Android and 0 elsewhere |
+| `insets` | { top?: number; right?: number; bottom?: number; left?: number } | ❌ | Safe-area insets; each edge given wins over the device's. Measured live by `react-native-safe-area-context` when installed, rotation included; otherwise the status-bar height on Android and 0 elsewhere |
 
 ### Purchase
 Passed to `logPurchase`, which sends a `purchase` event that in-app messaging campaigns can target (v4.0.0+).
@@ -613,6 +699,8 @@ Add to your `android/app/proguard-rules.pro`:
 - Check that `startInAppMessaging` runs after `init` with a customer ID, and that in-app messaging is enabled for your account
 
 ### Debug Logging
+
+Push engagement signals are logged as `GameballApp engagement <name> key=value ...`: `push_received`, `push_click`, `app_open` and `influenced_open` (v4.1.0+).
 
 In-app messaging logs why a campaign was shown or skipped, prefixed `[GameballIAM]`. These logs are on in development builds and off in release builds; to turn them on in a release build while reproducing an issue:
 ```typescript
