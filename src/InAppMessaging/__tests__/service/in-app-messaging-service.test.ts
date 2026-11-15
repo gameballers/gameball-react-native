@@ -182,6 +182,39 @@ describe('InAppMessagingService', () => {
     });
   });
 
+  describe('on "any" of their conditions', () => {
+    const anyOf = {
+      kind: 'event' as const,
+      eventName: 'purchase',
+      filters: [
+        { property: 'price', operator: 'greater_than' as const, value: 100 },
+        { property: 'category', operator: 'equals' as const, value: 'shoes' },
+      ],
+      match: 'any' as const,
+    };
+
+    it.each([
+      ['a message', campaign(2, { trigger: anyOf }), '2'],
+      ['a game', game(9645, { trigger: anyOf }), 9645],
+    ] as const)(
+      '%s opens when one condition matches, and not when none does',
+      async (_kind, anyCampaign, id) => {
+        const h = harness(sync([anyCampaign]));
+        await h.service.start({ customerId: 'c1' });
+
+        h.service.onCustomEvent('purchase', { price: 50, category: 'bags' });
+        expect(h.presenter.presented).toEqual([]);
+
+        h.service.onCustomEvent('purchase', { price: 50, category: 'shoes' });
+        expect(
+          h.presenter.presented.map(
+            (p) => p.message.widget?.gameCampaignId ?? p.message.id
+          )
+        ).toEqual([id]);
+      }
+    );
+  });
+
   describe('deferral and the pending slot', () => {
     it('defers while the host overlay is open and displays when it closes', async () => {
       let open = true;

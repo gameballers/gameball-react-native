@@ -154,3 +154,16 @@ export function allFiltersMatch(
   }
   return true;
 }
+
+/**
+ * At least one filter must pass. An empty list matches anything, as it does for `allFiltersMatch`:
+ * a campaign with no conditions is triggered by the event alone, however they would have been
+ * joined.
+ */
+export function anyFilterMatches(
+  filters: PropertyFilter[],
+  properties: Record<string, unknown>
+): boolean {
+  if (filters.length === 0) return true;
+  return filters.some((filter) => filterMatches(filter, properties));
+}

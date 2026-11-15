@@ -198,12 +198,29 @@ function parseTrigger(json: unknown, label: string): MessageTrigger | null {
         );
         return null;
       }
-      const filters = parseFilters(json.metadataFilters ?? json.filters, label);
+      const declared = json.metadataFilters ?? json.filters;
+      const filters = parseFilters(declared, label);
       if (filters === null) return null;
       const logical = asString(json.metadataLogicalOperator)?.toLowerCase();
+      if (logical === 'or') {
+        // "Any": one passing condition is enough. A condition this SDK cannot read was dropped
+        // above, which only narrows an "any" campaign — until none is left, and no condition at
+        // all would match every event.
+        if (
+          filters.length === 0 &&
+          Array.isArray(declared) &&
+          declared.length > 0
+        ) {
+          iamLog(
+            `campaign ${label} dropped: none of its "any" conditions can be evaluated on the device, and with none left it would show on every "${eventName}"`
+          );
+          return null;
+        }
+        return { kind: 'event', eventName, filters, match: 'any' };
+      }
       if (logical !== undefined && logical !== 'and') {
         iamLog(
-          `campaign ${label} dropped: metadataLogicalOperator "${logical}" is not supported (this SDK evaluates filters with AND)`
+          `campaign ${label} dropped: metadataLogicalOperator "${logical}" is not supported (this SDK evaluates filters with AND or OR)`
         );
         return null;
       }
