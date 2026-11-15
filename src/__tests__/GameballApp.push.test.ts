@@ -79,33 +79,64 @@ describe('GameballApp push handling', () => {
     expect(app.handlePushClick({ title: 'other app' })).toBe(false);
   });
 
-  it('reports an error for a tap before init, and still reports that tap after init', async () => {
-    const onError = jest.fn();
+  // A tap that starts the app reaches the SDK from getInitialNotification at start-up, usually
+  // before init, or while init still waits for bot settings. Either way the click must count.
+  it('reports taps handed over before or during init, without waiting for init to finish', async () => {
+    let answerBotSettings: (response: unknown) => void = () => {};
+    fetchMock.mockImplementation((url: string) =>
+      url === ENGAGEMENT_URL
+        ? Promise.resolve({ ok: true, status: 200, text: async () => '' })
+        : new Promise((resolve) => {
+            answerBotSettings = resolve;
+          })
+    );
+    const clickTokensSent = () =>
+      pushClickCalls().map(
+        ([, request]) => JSON.parse(request.body).clickToken
+      );
+
+    jest.setSystemTime(new Date('2026-11-15T20:00:00.000Z'));
+    const early = { onSuccess: jest.fn(), onError: jest.fn() };
     expect(
       app.handlePushClick(
         { isGB: 'true', gbClickToken: 'tok-before-init' },
-        { onError }
+        early
       )
     ).toBe(true);
-    expect(onError).toHaveBeenCalled();
-    expect(pushClickCalls()).toHaveLength(0);
     await flush();
+    expect(clickTokensSent()).toEqual([]);
     // A tapped push is never an influenced open
     expect((await savedPushes()).map((p: any) => p.key)).not.toContain(
       'tok-before-init'
     );
 
-    await app.init({ apiKey: 'key' } as any);
-    fetchMock.mockClear();
+    jest.setSystemTime(new Date('2026-11-15T20:00:01.500Z'));
+    const initDone = app.init({ apiKey: 'key' } as any);
+    await flush();
+    // Sent once init has the API key, while bot settings are still loading, dated at the tap
+    expect(clickTokensSent()).toEqual(['tok-before-init']);
+    expect(JSON.parse(pushClickCalls()[0]![1].body).occurredAt).toBe(
+      '2026-11-15T20:00:00.000Z'
+    );
+    expect(early.onSuccess).toHaveBeenCalledWith(true);
+    expect(early.onError).not.toHaveBeenCalled();
 
-    const onSuccess = jest.fn();
+    const during = { onSuccess: jest.fn() };
     app.handlePushClick(
-      { isGB: 'true', gbClickToken: 'tok-before-init' },
-      { onSuccess }
+      { isGB: 'true', gbClickToken: 'tok-during-init' },
+      during
     );
     await flush();
-    expect(pushClickCalls()).toHaveLength(1);
-    expect(onSuccess).toHaveBeenCalledWith(true);
+    expect(clickTokensSent()).toEqual(['tok-before-init', 'tok-during-init']);
+    expect(during.onSuccess).toHaveBeenCalledWith(true);
+
+    // The same tap from onNotificationOpenedApp as well still counts once
+    app.handlePushClick({ isGB: 'true', gbClickToken: 'tok-before-init' });
+    await flush();
+    expect(clickTokensSent()).toEqual(['tok-before-init', 'tok-during-init']);
+
+    answerBotSettings({ ok: true, status: 200, text: async () => '' });
+    await initDone;
   });
 
   it('reports the same tap once, however often it is passed in', async () => {
