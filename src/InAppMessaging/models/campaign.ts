@@ -1,3 +1,4 @@
+import { gameKey, messageKey, type CampaignKey } from './campaign-key';
 import type { InAppMessage } from './message';
 import type { MessageTrigger } from './trigger';
 
@@ -19,6 +20,32 @@ export interface Campaign {
   repeatable: boolean;
   /** When repeatable, minimum gap since this campaign's own last display. */
   minIntervalMs: number | null;
+}
+
+/**
+ * How this campaign is identified in display history.
+ *
+ * A game entry's `campaignId` is always 0, so its identity is the id of the game it opens.
+ * Reading this rather than `campaignId` is what keeps the two kinds from sharing cap state —
+ * challenge ids and message campaign ids are separate sequences that overlap numerically.
+ */
+export function campaignKeyOf(campaign: Campaign): CampaignKey {
+  const widget = campaign.message.widget;
+  return widget ? gameKey(widget.gameCampaignId) : messageKey(campaign.campaignId);
+}
+
+/**
+ * How a log line names a campaign: a game as `game:<id>`, by the game it opens, and a message as
+ * `campaign "<id>"`.
+ *
+ * Every game entry carries `campaignId: 0`, so naming one by it made every game read the same —
+ * and two games on one trigger read as one campaign displacing itself.
+ */
+export function describeCampaign(campaign: Campaign): string {
+  const widget = campaign.message.widget;
+  return widget
+    ? gameKey(widget.gameCampaignId)
+    : `campaign "${campaign.campaignId}"`;
 }
 
 export function hasExpiredAt(campaign: Campaign, nowMs: number): boolean {

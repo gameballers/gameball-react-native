@@ -1,3 +1,4 @@
+import { messageKey } from '../../models/campaign-key';
 import { InAppMessagingService } from '../../service/in-app-messaging-service';
 import { InMemoryFrequencyCap } from '../../evaluation/frequency-cap';
 import type { Campaign } from '../../models/campaign';
@@ -5,7 +6,7 @@ import type { PropertyFilter } from '../../models/property-filter';
 import type { SyncResult } from '../../source/sync-result';
 import { ImageArtworkPrefetcher } from '../../presentation/artwork-prefetcher';
 import type { Artwork, ArtworkPrefetcher } from '../../presentation/presenter';
-import { campaign, message, T0 } from '../helpers/fixtures';
+import { campaign, game, message, T0 } from '../helpers/fixtures';
 import {
   FakeCache,
   FakePrefetcher,
@@ -101,7 +102,7 @@ describe('InAppMessagingService', () => {
       expect(h.analytics.events).toEqual([]);
       h.presenter.paint();
       expect(h.analytics.types()).toEqual(['impression']);
-      expect(h.cap.snapshot().lastDisplayByCampaign.get(1)).toBe(T0);
+      expect(h.cap.snapshot().lastDisplayByCampaign.get(messageKey(1))).toBe(T0);
     });
     it('a second start for the same customer does not refetch; a new customer does and reloads history', async () => {
       const h = harness(sync([campaign(1)]));
@@ -721,6 +722,432 @@ describe('InAppMessagingService', () => {
       h.service.onAppResumed();
       await jest.advanceTimersByTimeAsync(0);
       expect(h.source.fetches).toBe(2);
+    });
+  });
+
+  describe('games', () => {
+    /** What opened, in order: a game by its own id, a message by its id. */
+    const opened = (h: ReturnType<typeof harness>) =>
+      h.presenter.presented.map(
+        (p) => p.message.widget?.gameCampaignId ?? p.message.id
+      );
+
+    /** The customer sees the game through and closes it. */
+    const playThrough = (h: ReturnType<typeof harness>) => {
+      h.presenter.paint();
+      h.presenter.dismiss();
+    };
+
+    describe('message artwork still warming up', () => {
+      // Found on a device: an event a few seconds after a sync passed every game over as "artwork
+      // not ready" while the sync's message images loaded, and the trigger was lost.
+      const slowArtwork = () => {
+        let release: (ready: boolean) => void = () => {};
+        const gate = new Promise<boolean>((resolve) => (release = resolve));
+        const prefetcher: ArtworkPrefetcher = {
+          prefetch: (m) => (m.widget ? Promise.resolve(true) : gate),
+          retainOnly: () => {},
+        };
+        return { prefetcher, release: () => release(true) };
+      };
+      // Lets the sync land without reaching the warm-up's own 5 s bound.
+      const flush = () => jest.advanceTimersByTimeAsync(0);
+
+      it('an event opens its game before the warm-up has finished', async () => {
+        const artwork = slowArtwork();
+        const h = harness(
+          sync([
+            campaign(1, { trigger: eventTrigger('view') }),
+            game(9645, { trigger: eventTrigger('spin') }),
+          ]),
+          { artwork: artwork.prefetcher }
+        );
+        const started = h.service.start({ customerId: 'c1' });
+        await flush();
+
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        artwork.release();
+        await started;
+      });
+
+      it('a message still waits for its artwork', async () => {
+        const artwork = slowArtwork();
+        const h = harness(sync([campaign(1, { trigger: eventTrigger('view') })]), {
+          artwork: artwork.prefetcher,
+        });
+        const started = h.service.start({ customerId: 'c1' });
+        await flush();
+
+        h.service.onCustomEvent('view');
+        expect(opened(h)).toEqual([]);
+
+        artwork.release();
+        await started;
+      });
+    });
+
+    describe('follow the message frequency rules', () => {
+      it('a game that is not repeatable opens once ever', async () => {
+        const h = harness(
+          sync([game(9645, { trigger: eventTrigger('spin') })])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
+
+      it('a repeatable game waits out its own minimum interval, then opens again', async () => {
+        const h = harness(
+          sync([
+            game(9645, {
+              trigger: eventTrigger('spin'),
+              repeatable: true,
+              minIntervalMs: 600_000,
+            }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        h.advance(600_000 - 31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('a repeatable game with no interval of its own waits for the account cooldown and nothing else', async () => {
+        const h = harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin'), repeatable: true }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        playThrough(h);
+
+        h.advance(29_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        h.advance(1_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('one account cooldown spans messages and games alike', async () => {
+        const h = harness(
+          sync([campaign(1), game(9645, { trigger: eventTrigger('spin') })])
+        );
+        await h.service.start({ customerId: 'c1' });
+        playThrough(h);
+
+        h.advance(5_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual(['1']);
+
+        h.advance(25_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual(['1', 9645]);
+      });
+
+      it('quiet hours hold a game back as they do a message', async () => {
+        const minute = new Date(T0).getHours() * 60 + new Date(T0).getMinutes();
+        const h = harness(
+          sync([game(9645)], {
+            quietHours: {
+              startMinute: minute,
+              endMinute: (minute + 120) % 1440,
+            },
+          })
+        );
+        await h.service.start({ customerId: 'c1' });
+        expect(opened(h)).toEqual([]);
+      });
+    });
+
+    it('reports nothing when a game is closed, as it reports nothing when one is shown', async () => {
+      const h = harness(sync([game(9645)]));
+      await h.service.start({ customerId: 'c1' });
+      h.presenter.paint();
+      h.presenter.dismiss();
+
+      expect(opened(h)).toEqual([9645]);
+      expect(h.analytics.events).toEqual([]);
+    });
+
+    describe('two on one trigger', () => {
+      /** Two games on the same event: identical in every field but the game they open. */
+      const twoGames = () =>
+        harness(
+          sync(
+            [
+              game(9645, { trigger: eventTrigger('spin') }),
+              game(9702, { trigger: eventTrigger('spin') }),
+            ],
+            { cooldownMs: 10_000 }
+          )
+        );
+
+      it('keeps the second waiting behind the first, and opens it once the floor lapses', async () => {
+        // Every game carries campaignId 0, so telling the runner-up from the winner by that id
+        // ruled out both: the second game was never kept.
+        const h = twoGames();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+        expect(h.service.pendingCampaign?.message.widget?.gameCampaignId).toBe(
+          9702
+        );
+
+        h.presenter.paint();
+        h.advance(3_000);
+        h.presenter.dismiss();
+        h.advance(7_000);
+        await jest.advanceTimersByTimeAsync(7_000);
+        expect(opened(h)).toEqual([9645, 9702]);
+      });
+
+      it('names each game in the log by its own id, never as campaign "0"', async () => {
+        const log = jest.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          const h = twoGames();
+          await h.service.start({ customerId: 'c1' });
+          h.service.onCustomEvent('spin');
+
+          const lines = log.mock.calls.map((call) => String(call[0]));
+          expect(lines).toContain(
+            '[GameballIAM] game:9702 deferred: game:9645 took this trigger first'
+          );
+          expect(lines.join('\n')).not.toContain('campaign "0"');
+        } finally {
+          log.mockRestore();
+        }
+      });
+    });
+
+    describe('after a play', () => {
+      /** A wheel that may open on every spin event, as far as its frequency goes. */
+      const wheel = () =>
+        harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin'), repeatable: true }),
+          ])
+        );
+
+      /** The open game reports that the customer finished playing it. */
+      const finish = (h: ReturnType<typeof harness>) =>
+        h.presenter.current!.callbacks.onGameCompleted?.();
+
+      /** Long enough away for a resume to start a new session, with its own sync. */
+      const newSession = async (h: ReturnType<typeof harness>) => {
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        await jest.advanceTimersByTimeAsync(0);
+      };
+
+      it('is not offered again until the next successful sync', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        finish(h);
+        h.presenter.dismiss();
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+
+        await newSession(h);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+
+      it('stays put through a sync that failed', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        finish(h);
+        h.presenter.dismiss();
+
+        h.source.result = new Error('offline');
+        await newSession(h);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
+
+      it('is dropped from the waiting slot, where it was parked while it was being played', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        h.advance(31_000);
+        h.service.onCustomEvent('spin'); // the same game again, parked behind itself
+        expect(h.service.pendingCampaign?.message.widget?.gameCampaignId).toBe(
+          9645
+        );
+
+        finish(h);
+        h.presenter.dismiss();
+        expect(opened(h)).toEqual([9645]);
+        expect(h.service.pendingCampaign).toBeNull();
+      });
+
+      it('a game closed without being played is offered again as its frequency allows', async () => {
+        const h = wheel();
+        await h.service.start({ customerId: 'c1' });
+        h.service.onCustomEvent('spin');
+        h.presenter.paint();
+        h.presenter.dismiss();
+
+        h.advance(31_000);
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645, 9645]);
+      });
+    });
+
+    describe('waiting', () => {
+      /** The id of whatever sits in the waiting slot: a game by its own id, a message by its id. */
+      const waiting = (h: ReturnType<typeof harness>) => {
+        const parked = h.service.pendingCampaign;
+        return parked
+          ? parked.message.widget?.gameCampaignId ?? parked.message.id
+          : null;
+      };
+
+      it.each([
+        ['a game', game(9645, { trigger: eventTrigger('e') }), 9645],
+        ['a message', campaign(2, { trigger: eventTrigger('e') }), '2'],
+      ] as const)(
+        'drops %s that expired while it waited',
+        async (_kind, parkedCampaign, id) => {
+          const h = harness(
+            sync([campaign(1), { ...parkedCampaign, expiresAt: T0 + 60_000 }])
+          );
+          await h.service.start({ customerId: 'c1' });
+          h.presenter.paint();
+          h.advance(31_000);
+          h.service.onCustomEvent('e'); // parked behind message 1
+          expect(waiting(h)).toBe(id);
+
+          h.advance(30_000); // past its expiry
+          h.presenter.dismiss();
+          expect(opened(h)).toEqual(['1']);
+          expect(h.service.pendingCampaign).toBeNull();
+        }
+      );
+
+      it('drops a waiting game the latest sync no longer carries', async () => {
+        let overlayOpen = false;
+        const h = harness(
+          sync([game(9645, { trigger: eventTrigger('spin') })]),
+          {
+            overlayOpen: () => overlayOpen,
+          }
+        );
+        await h.service.start({ customerId: 'c1' });
+
+        // A new session begins, and its sync is still on the wire when the game's event fires:
+        // the game is judged against the set held from before, and parked behind an overlay.
+        const release = h.source.hold();
+        h.source.result = sync([]);
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        overlayOpen = true;
+        h.service.onCustomEvent('spin');
+        expect(waiting(h)).toBe(9645);
+
+        release(); // the backend no longer offers the game
+        await jest.advanceTimersByTimeAsync(0);
+        overlayOpen = false;
+        h.service.onHostOverlayClosed();
+        expect(opened(h)).toEqual([]);
+        expect(h.service.pendingCampaign).toBeNull();
+      });
+
+      it.each([
+        ['a game', game(9645, { trigger: eventTrigger('e') }), 9645],
+        ['a message', campaign(2, { trigger: eventTrigger('e') }), '2'],
+      ] as const)(
+        'lets go of %s left waiting when a new session syncs, even one that still carries it',
+        async (_kind, parkedCampaign, id) => {
+          let overlayOpen = true;
+          const h = harness(sync([parkedCampaign]), {
+            overlayOpen: () => overlayOpen,
+          });
+          await h.service.start({ customerId: 'c1' });
+          h.service.onCustomEvent('e');
+          expect(waiting(h)).toBe(id);
+
+          // What waits belongs to the session that parked it; the new one decides afresh.
+          h.service.onAppPaused();
+          h.advance(31_000);
+          h.service.onAppResumed();
+          await jest.advanceTimersByTimeAsync(0);
+          expect(h.service.pendingCampaign).toBeNull();
+
+          overlayOpen = false;
+          h.service.onHostOverlayClosed();
+          expect(opened(h)).toEqual([]);
+        }
+      );
+    });
+
+    describe('when a new session cannot sync', () => {
+      it('opens no game from the set the last session held, though its messages still show', async () => {
+        const h = harness(
+          sync([
+            game(9645, { trigger: eventTrigger('spin') }),
+            campaign(2, { trigger: eventTrigger('promo') }),
+          ])
+        );
+        await h.service.start({ customerId: 'c1' });
+
+        h.source.result = new Error('offline');
+        h.service.onAppPaused();
+        h.advance(31_000);
+        h.service.onAppResumed();
+        await jest.advanceTimersByTimeAsync(0);
+
+        // Nothing has confirmed the game is still live: it may have ended while the app was away.
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([]);
+        // A message carries its own content, so the held one is still correct.
+        h.service.onCustomEvent('promo');
+        expect(opened(h)).toEqual(['2']);
+      });
+
+      it('opens the game again once a later session syncs', async () => {
+        const live = sync([game(9645, { trigger: eventTrigger('spin') })]);
+        const h = harness(live);
+        await h.service.start({ customerId: 'c1' });
+        const newSession = async () => {
+          h.service.onAppPaused();
+          h.advance(31_000);
+          h.service.onAppResumed();
+          await jest.advanceTimersByTimeAsync(0);
+        };
+
+        h.source.result = new Error('offline');
+        await newSession();
+        h.source.result = live;
+        await newSession();
+
+        h.service.onCustomEvent('spin');
+        expect(opened(h)).toEqual([9645]);
+      });
     });
   });
 });

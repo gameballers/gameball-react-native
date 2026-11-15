@@ -78,6 +78,55 @@ describe('ReactMessagePresenter', () => {
     expect(mounted.current?.artwork).toEqual({ image: held, icon: null });
   });
 
+  it("hands the host a game's url, composed once as it is presented", () => {
+    const composed: string[] = [];
+    const presenter = new ReactMessagePresenter({
+      gameUrl: (widget) => {
+        const url = `https://widget.test?openDetail=details_${widget.gameCampaignType}_${widget.gameCampaignId}`;
+        composed.push(url);
+        return url;
+      },
+    });
+    const mounted = host(presenter);
+
+    presenter.present(
+      message({
+        widget: { gameCampaignId: 9645, gameCampaignType: 'wheel' },
+      }),
+      callbacks()
+    );
+    mounted.current?.onShown();
+    mounted.current?.onShown();
+
+    expect(mounted.current?.gameUrl).toBe(
+      'https://widget.test?openDetail=details_wheel_9645'
+    );
+    expect(composed).toHaveLength(1);
+
+    presenter.dismiss();
+    presenter.present(message(), callbacks());
+    expect(mounted.current?.gameUrl).toBeNull();
+    expect(composed).toHaveLength(1);
+  });
+
+  it('refuses a game it cannot compose a url for, rather than draw an empty card', () => {
+    const presenter = new ReactMessagePresenter({ gameUrl: () => null });
+    const mounted = host(presenter);
+    const cb = callbacks();
+
+    expect(
+      presenter.present(
+        message({
+          widget: { gameCampaignId: 9645, gameCampaignType: 'wheel' },
+        }),
+        cb
+      )
+    ).toBe(false);
+    expect(mounted.current).toBeNull();
+    expect(presenter.isShowing).toBe(false);
+    expect(cb.calls).toEqual([]);
+  });
+
   it('refuses a second message while one is showing', () => {
     const presenter = new ReactMessagePresenter();
     host(presenter);

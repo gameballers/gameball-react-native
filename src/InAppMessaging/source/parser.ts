@@ -13,6 +13,7 @@ import {
   type MessageType,
   type SlidePosition,
   type TextAlign,
+  type WidgetContent,
 } from '../models/message';
 import { parseOperator, type PropertyFilter } from '../models/property-filter';
 import { parseQuietHours } from '../models/quiet-hours';
@@ -25,6 +26,26 @@ import {
 
 /** How long a slideup stays when the campaign names no duration. */
 export const DEFAULT_SLIDEUP_AUTO_DISMISS_MS = 8_000;
+
+/**
+ * The kinds of entry the sync response carries.
+ *
+ * An unrecognised kind is skipped, never coerced. More are expected, and an older client must
+ * degrade to silence rather than to a wrong display.
+ */
+const OUTBOUND_CAMPAIGN_TYPE = 1;
+const GAME_CAMPAIGN_TYPE = 2;
+
+/**
+ * Games this SDK can open, as the open-details text the widget expects.
+ *
+ * A value absent from this set is skipped: composing `details_<unknown>_<id>` would ask the widget
+ * to open something it has no renderer for.
+ */
+const KNOWN_GAME_TYPES = new Set([
+  'wheel', 'slot', 'quiz', 'scratch', 'match', 'catcher',
+  'tictactoe', 'shooter', 'puzzle', 'tap_target', 'highway_drive',
+]);
 
 const MESSAGE_TYPE_NAMES: Record<number, string> = {
   1: 'slideup',
@@ -157,6 +178,15 @@ function parseTrigger(json: unknown, label: string): MessageTrigger | null {
   switch (type) {
     case 'session_start':
       return { kind: 'session_start' };
+    case 'screen':
+      // Deliberate, not unimplemented. On the web a URL is ambient and free; on mobile nothing
+      // is, so a screen trigger needs the host to instrument it — at which point it costs the
+      // same as a custom event. Named here so a marketer who targets a screen gets a diagnosable
+      // silence rather than an inexplicable one.
+      iamLog(
+        `campaign ${label} dropped: screen triggers are not supported by this SDK version (screen "${String(asString(json.name))}")`
+      );
+      return null;
     case 'event':
     case 'custom_event': {
       const eventName = asString(json.name);
@@ -258,6 +288,26 @@ function parseMessage(
     );
   }
 
+  // Which kind of entry this is. Read before anything about the content, because a game's content
+  // arrives at display time and the checks below would otherwise drop it for having no header,
+  // body or image.
+  const campaignType = asInt(json.campaignType) ?? OUTBOUND_CAMPAIGN_TYPE;
+  if (
+    campaignType !== OUTBOUND_CAMPAIGN_TYPE &&
+    campaignType !== GAME_CAMPAIGN_TYPE
+  ) {
+    iamLog(
+      `campaign ${label} skipped: unrecognised campaignType ${campaignType} — this SDK version renders outbound messages and opens game campaigns`
+    );
+    return null;
+  }
+
+  const widget =
+    campaignType === GAME_CAMPAIGN_TYPE ? parseGameContent(json, label) : null;
+  if (campaignType === GAME_CAMPAIGN_TYPE && widget === null) {
+    return null; // already logged
+  }
+
   const header = asString(locale.header);
   const body = asString(locale.message) ?? asString(locale.body);
   const imageUrl = artworkUrl(content, type, label);
@@ -266,7 +316,11 @@ function parseMessage(
   const hasBody = !!body;
   const hasImage = !!imageUrl;
 
-  if (type === 'slideup') {
+  if (widget !== null) {
+    // Exempt by kind, not by which fields happen to be absent. A game renders itself, while a
+    // *message* missing all three is still a campaign with nothing to show and must keep failing
+    // for that reason.
+  } else if (type === 'slideup') {
     if (!hasHeader && !hasBody) {
       iamLog(
         `campaign ${label} dropped: a slideup needs text, and this one has none`
@@ -321,7 +375,39 @@ function parseMessage(
     buttons,
     extras: parseExtras(content.extras),
     style: parseMessageStyle(content.colors, content.textAlignment),
+    widget,
   };
+}
+
+/**
+ * Reads the game fields from a `campaignType: 2` entry.
+ *
+ * null when the entry cannot be opened, which drops it. Both fields are required: without the id
+ * there is nothing to open, and without a recognised type there is no renderer to ask for.
+ */
+function parseGameContent(
+  json: Record<string, unknown>,
+  label: string
+): WidgetContent | null {
+  const gameCampaignId = asInt(json.gameCampaignId);
+  if (gameCampaignId === null || gameCampaignId === 0) {
+    iamLog(
+      `campaign ${label} dropped: a game entry needs a "gameCampaignId" (its "campaignId" is always 0 and identifies nothing)`
+    );
+    return null;
+  }
+
+  const gameCampaignType = asString(json.gameCampaignType);
+  if (gameCampaignType === null || !KNOWN_GAME_TYPES.has(gameCampaignType)) {
+    iamLog(
+      `campaign ${label} dropped: unrecognised gameCampaignType "${String(gameCampaignType)}" — this SDK version has no renderer for it`
+    );
+    return null;
+  }
+
+  // No delay and no dismissal limit: a game opens when its trigger fires, and how often it may open
+  // is the message frequency rules' business, not a counter of its own.
+  return { gameCampaignId, gameCampaignType };
 }
 
 function resolveLayout(

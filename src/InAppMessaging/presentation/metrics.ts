@@ -23,6 +23,14 @@ export const MessageMetrics = {
   /** The glyph itself, inside a 48 hit target that is the accessibility floor on both platforms. */
   closeGlyphSize: 24,
   closeHitTarget: 48,
+  /**
+   * A game's close glyph sits on a disc of its own. The colours under it are the widget's, and
+   * unknown here: a bare glyph could land dark on dark, and a game's page draws no way out on
+   * mobile, so this one has to be seen.
+   */
+  gameCloseDisc: 'rgba(0, 0, 0, 0.45)',
+  gameCloseGlyph: '#FFFFFF',
+  closeDiscSize: 32,
   buttonCornerRadius: 8,
 } as const;
 
