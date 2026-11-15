@@ -562,10 +562,18 @@ function parseButtons(
   return buttons;
 }
 
+/** A date and time that ends without a zone designator: "2026-11-04T13:42:00". */
+const TIME_WITHOUT_ZONE = /T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
+
+/**
+ * The sync's stamps are UTC. A game's end date arrives without a zone designator, and Date.parse
+ * reads that as device-local time, which ended games early (or late) by the device's UTC offset. It
+ * is read as UTC, as Android reads it.
+ */
 function parseTimestamp(value: unknown, label: string): number | null {
   const raw = asString(value);
   if (!raw) return null;
-  const ms = Date.parse(raw);
+  const ms = Date.parse(TIME_WITHOUT_ZONE.test(raw) ? `${raw}Z` : raw);
   if (Number.isNaN(ms)) {
     iamLog(`campaign ${label}: ignoring unparseable timestamp "${raw}"`);
     return null;
