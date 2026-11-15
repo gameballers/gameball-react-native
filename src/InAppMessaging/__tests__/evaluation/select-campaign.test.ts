@@ -1,3 +1,4 @@
+import { messageKey } from '../../models/campaign-key';
 import {
   selectCampaign,
   isRepeatEligible,
@@ -12,7 +13,10 @@ const cap = (
   entries: [number, number][] = [],
   lastDisplayAt: number | null = null
 ): CapState => ({
-  lastDisplayByCampaign: new Map(entries),
+  // Every entry here is a message campaign; games did not exist when these were written.
+  lastDisplayByCampaign: new Map(
+    entries.map(([id, at]) => [messageKey(id), at] as const)
+  ),
   lastDisplayAt:
     lastDisplayAt ??
     (entries.length ? Math.max(...entries.map((e) => e[1])) : null),

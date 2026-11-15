@@ -138,6 +138,107 @@ describe('lifecycle', () => {
   });
 });
 
+describe('game campaigns', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  /** A wheel opened at session start — the shape the sync endpoint returns for a game. */
+  const syncBody = JSON.stringify({
+    cooldownSeconds: 30,
+    quietHours: null,
+    campaignOrdering: null,
+    messages: [
+      {
+        campaignType: 2,
+        campaignId: 0,
+        variationId: 0,
+        dispatchId: null,
+        name: 'Spin the Wheel',
+        priority: 0,
+        messageType: 2,
+        trigger: {
+          type: 'session_start',
+          repeatable: true,
+          minIntervalSeconds: null,
+        },
+        content: null,
+        locale: null,
+        localeCode: null,
+        expiresAt: null,
+        isTest: false,
+        gameCampaignId: 9645,
+        gameCampaignType: 'wheel',
+      },
+    ],
+  });
+
+  function serveSync(): void {
+    globalThis.fetch = jest.fn(
+      async (input: string): Promise<unknown> =>
+        input.endsWith('/inapp-messages/sync')
+          ? { ok: true, status: 200, text: async () => syncBody }
+          : {
+              ok: true,
+              status: 200,
+              text: async () => '{}',
+              json: async () => ({}),
+            }
+    ) as unknown as typeof fetch;
+  }
+
+  async function openedGameUrl(
+    config: Partial<Parameters<InAppMessagingController['configure']>[0]>
+  ): Promise<string> {
+    serveSync();
+    const c = new InAppMessagingController();
+    c.configure({
+      apiKey: 'k',
+      apiBaseUrl: 'https://api.test',
+      lang: 'en',
+      debug: false,
+      ...config,
+    });
+    c.identified('c1', 'ar');
+    const screen: { entry: PresentedMessage | null } = { entry: null };
+    c.presenter.attach((entry) => {
+      screen.entry = entry;
+    });
+    await c.start();
+    const url = screen.entry?.gameUrl ?? null;
+    c.stop();
+    if (url === null) {
+      throw new Error('the game was never presented with a url');
+    }
+    return url;
+  }
+
+  it("opens a game from messaging's own configuration, with nothing from the profile widget", async () => {
+    // The profile widget's state is set only by showProfile. A game must not need it: messaging
+    // has the api key, the language, the widget host, the session token and its own customer.
+    const url = await openedGameUrl({
+      widgetUrlPrefix: 'https://m.gameball.app/alpha',
+      sessionToken: () => 'tok',
+    });
+
+    expect(url.startsWith('https://m.gameball.app/alpha?')).toBe(true);
+    expect(url).toContain('customerId=c1');
+    expect(url).toContain('apiKey=k');
+    expect(url).toContain('lang=ar');
+    expect(url).toContain('sessionToken=tok');
+    expect(url).toContain('openDetail=details_wheel_9645');
+    expect(url).toContain('hideNavigation=true');
+  });
+
+  it('loads production, and sends no session token, when neither is configured', async () => {
+    const url = await openedGameUrl({});
+
+    expect(url.startsWith('https://m.gameball.app?')).toBe(true);
+    expect(url).not.toContain('sessionToken=');
+  });
+});
+
 describe('artwork', () => {
   const IMAGE = 'https://cdn.test/hero.png';
   const HELD = 'data:image/png;base64,aGVybw==';

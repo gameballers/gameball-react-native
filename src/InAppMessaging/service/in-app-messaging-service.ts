@@ -10,7 +10,13 @@ import {
   selectCampaign,
 } from '../evaluation/select-campaign';
 import { iamLog } from '../log';
-import type { Campaign } from '../models/campaign';
+import {
+  campaignKeyOf,
+  describeCampaign,
+  hasExpiredAt,
+  type Campaign,
+} from '../models/campaign';
+import type { CampaignKey } from '../models/campaign-key';
 import {
   artworkUrlsOf,
   type ClickAction,
@@ -120,7 +126,27 @@ export class InAppMessagingService {
   private beforeDisplay: BeforeDisplay | undefined;
   private onAction: OnAction | undefined;
   private campaigns: Campaign[] = [];
-  private artworkReady = new Set<number>();
+
+  /**
+   * Why the held campaigns lack this session's confirmation, or null when this session's sync
+   * delivered them: they came from the cache, or this session's sync failed and they are the last
+   * session's.
+   *
+   * Only games care. A message carries its own content, so an unconfirmed one is still correct; a
+   * game carries a pointer and fetches its content live, so an unconfirmed entry is a promise this
+   * SDK cannot keep — the campaign may have ended, and the widget would answer "this campaign is
+   * not available" to a customer who never asked for it.
+   */
+  private unconfirmed: string | null = null;
+  /**
+   * Games the customer finished playing since the last successful sync.
+   *
+   * Not offered again until the next one: the sync is where the backend says whether this
+   * customer can still play a game, and until it has spoken a finished game would only open on
+   * "you have already played".
+   */
+  private played = new Set<CampaignKey>();
+  private artworkReady = new Set<CampaignKey>();
   private artworkCheckedAt: number | null = null;
   private artworkRefreshInFlight = false;
   private cooldownMs = DEFAULT_DISPLAY_COOLDOWN_MS;
@@ -199,6 +225,7 @@ export class InAppMessagingService {
     this.customerId = null; // before dismiss(): its callback must not revive the pending slot
     this.presenter.dismiss();
     this.campaigns = [];
+    this.played = new Set();
     this.artworkReady = new Set();
     this.prefetcher.retainOnly(new Set()); // the artwork is in memory; nothing should outlive a logout there
     this.presentationInFlight = false;
@@ -280,6 +307,7 @@ export class InAppMessagingService {
     this.clearPending();
     this.presenter.dismiss();
     this.campaigns = [];
+    this.played = new Set(); // a play belongs to the customer who played, not to the next one
     this.artworkReady = new Set();
     this.artworkCheckedAt = null;
     this.quietHours = null;
@@ -309,6 +337,14 @@ export class InAppMessagingService {
     const customerId = this.customerId;
     if (customerId === null) return;
     const generation = this.generation;
+    // Whatever waits belongs to the session that parked it. The new session's sync decides
+    // afresh, and session start is evaluated again once it has.
+    if (this.pending !== null) {
+      iamLog(
+        `pending ${describeCampaign(this.pending)} dropped: a new session began`
+      );
+    }
+    this.clearPending();
 
     let cached: SyncResult | null = null;
     if (loadPersisted) {
@@ -331,6 +367,9 @@ export class InAppMessagingService {
       const result = await this.source.fetch(customerId);
       if (this.generation !== generation) return;
       this.campaigns = result.campaigns;
+      this.unconfirmed = null;
+      // The backend has now said which games this customer can still play.
+      this.played = new Set();
       this.cooldownMs = result.cooldownMs;
       this.quietHours = result.quietHours;
       synced = true;
@@ -343,9 +382,14 @@ export class InAppMessagingService {
     } catch (error) {
       if (this.generation !== generation) return;
       iamLog(`sync failed (${String(error)})`);
+      // Whatever is held now, nothing this session has confirmed it: kept from the last session
+      // on a resume, or read from the cache below.
+      this.unconfirmed =
+        "this session's sync failed, so the campaign set is the last session's";
     }
 
     if (!synced && cached) {
+      this.unconfirmed = 'the campaign set came from the cache';
       this.campaigns = cached.campaigns;
       this.cooldownMs = cached.cooldownMs;
       this.quietHours = cached.quietHours;
@@ -389,7 +433,7 @@ export class InAppMessagingService {
     // A stop/switch while the images loaded means these results belong to a session that is gone.
     if (this.generation !== generation) return;
     this.artworkReady = new Set(
-      campaigns.filter((_, i) => ready[i]).map((c) => c.campaignId)
+      campaigns.filter((_, i) => ready[i]).map(campaignKeyOf)
     );
     const took = this.clock() - startedAt;
     if (took > SLOW_PREFETCH_MS)
@@ -405,15 +449,15 @@ export class InAppMessagingService {
         this.prefetchTimeoutMs,
         () => {
           iamLog(
-            `campaign "${campaign.campaignId}" artwork did not load within ${this.prefetchTimeoutMs}ms`
+            `${describeCampaign(campaign)} artwork did not load within ${
+              this.prefetchTimeoutMs
+            }ms`
           );
           return false;
         }
       );
     } catch (error) {
-      iamLog(
-        `campaign "${campaign.campaignId}" artwork failed (${String(error)})`
-      );
+      iamLog(`${describeCampaign(campaign)} artwork failed (${String(error)})`);
       return false;
     }
   }
@@ -436,9 +480,7 @@ export class InAppMessagingService {
         // The customer (or the campaign set) may have changed while the images loaded; marking
         // artwork ready for campaigns nobody is evaluating any more would be a stale write.
         if (this.generation !== generation) return;
-        const recovered = notReady
-          .filter((_, i) => ready[i])
-          .map((c) => c.campaignId);
+        const recovered = notReady.filter((_, i) => ready[i]).map(campaignKeyOf);
         if (recovered.length) {
           for (const id of recovered) this.artworkReady.add(id);
           iamLog(
@@ -460,10 +502,18 @@ export class InAppMessagingService {
     const displayable: Campaign[] = [];
     const notReady: Campaign[] = [];
     for (const c of this.campaigns) {
-      if (this.artworkReady.has(c.campaignId)) displayable.push(c);
-      else {
+      const heldBack = this.gameHeldBack(c);
+      // A game has no artwork to wait for. The ready set is only filled once the whole sync's
+      // warm-up has finished, so without this a trigger in the seconds after a sync passed every
+      // game over as "not ready" and lost it.
+      if (!c.message.widget && !this.artworkReady.has(campaignKeyOf(c))) {
         notReady.push(c);
-        iamLog(`campaign "${c.campaignId}" passed over: artwork not ready`);
+        iamLog(`${describeCampaign(c)} passed over: artwork not ready`);
+      } else if (heldBack !== null) {
+        // Dropped rather than deferred: the next live sync is what makes it openable again.
+        iamLog(`${describeCampaign(c)} skipped: ${heldBack}`);
+      } else {
+        displayable.push(c);
       }
     }
     if (notReady.length) this.maybeRefreshArtwork(notReady);
@@ -483,7 +533,7 @@ export class InAppMessagingService {
     this.emit?.(campaign.message);
     switch (this.decide(campaign.message)) {
       case 'discard':
-        iamLog(`campaign "${campaign.campaignId}" discarded by beforeDisplay`);
+        iamLog(`${describeCampaign(campaign)} discarded by beforeDisplay`);
         return;
       case 'later':
         this.defer(campaign, 'the host asked to display it later');
@@ -497,6 +547,22 @@ export class InAppMessagingService {
     }
   }
 
+  /**
+   * Why a game may not open now, or null when nothing holds it back. Never holds a message back.
+   *
+   * A game opens only from a set this session's sync confirmed — never from the cache, nor from
+   * the last session's set when this one's sync failed (see `unconfirmed`). Nor is a game opened
+   * again once it has been played, until a sync has said whether this customer can still play it.
+   */
+  private gameHeldBack(campaign: Campaign): string | null {
+    if (!campaign.message.widget) return null;
+    if (this.unconfirmed !== null)
+      return `${this.unconfirmed}, and a game must be confirmed live before it is opened`;
+    if (this.played.has(campaignKeyOf(campaign)))
+      return 'it was played since the last sync, and is offered again only once a sync has offered it';
+    return null;
+  }
+
   /** Keeps the next-best campaign for this occurrence behind the one on screen. Only when the winner took the screen. */
   private deferRunnerUp(
     occurrence: TriggerOccurrence,
@@ -507,7 +573,11 @@ export class InAppMessagingService {
     if (!this.presenter.isShowing || this.pending !== null) return;
     const runnerUp = selectCampaign({
       occurrence,
-      campaigns: displayable.filter((c) => c.campaignId !== winner.campaignId),
+      // By key, never by campaignId: every game carries campaignId 0, so comparing that ruled
+      // out every other game along with the one that won.
+      campaigns: displayable.filter(
+        (c) => campaignKeyOf(c) !== campaignKeyOf(winner)
+      ),
       capState: capBefore,
       nowMs: this.clock(),
       cooldownMs: this.cooldownMs,
@@ -516,7 +586,7 @@ export class InAppMessagingService {
     if (runnerUp)
       this.defer(
         runnerUp,
-        `campaign "${winner.campaignId}" took this trigger first`
+        `${describeCampaign(winner)} took this trigger first`
       );
   }
 
@@ -562,7 +632,11 @@ export class InAppMessagingService {
           this.variableTimeoutMs,
           () => {
             iamLog(
-              `personalisation for campaign "${campaign.campaignId}" did not arrive within ${this.variableTimeoutMs}ms; displaying the text from the last sync`
+              `personalisation for ${describeCampaign(
+                campaign
+              )} did not arrive within ${
+                this.variableTimeoutMs
+              }ms; displaying the text from the last sync`
             );
             return {} as Record<string, string>;
           }
@@ -571,7 +645,7 @@ export class InAppMessagingService {
       }
     } catch (error) {
       iamLog(
-        `personalisation for campaign "${campaign.campaignId}" failed (${String(
+        `personalisation for ${describeCampaign(campaign)} failed (${String(
           error
         )}); displaying the text from the last sync`
       );
@@ -581,7 +655,9 @@ export class InAppMessagingService {
     message = clearUnresolvedTokens(message);
     if (!this.isStarted || this.generation !== generation) {
       iamLog(
-        `campaign "${campaign.campaignId}" abandoned: messaging stopped while its personalisation was resolving`
+        `${describeCampaign(
+          campaign
+        )} abandoned: messaging stopped while its personalisation was resolving`
       );
       return;
     }
@@ -600,12 +676,13 @@ export class InAppMessagingService {
     // dismisses it later still reports the dismissal (and the impression) under the right customer.
     const shownTo = this.customerId;
     if (shownTo === null) return;
+    const generation = this.generation;
     let shown = false;
     let engaged = false;
     const presented = this.presenter.present(message, {
       onShown: () => {
         shown = true;
-        this.cap.recordDisplay(campaign.campaignId, this.clock());
+        this.cap.recordDisplay(campaignKeyOf(campaign), this.clock());
         this.logEvent(campaign, 'impression', shownTo);
       },
       onButtonPressed: (button) => {
@@ -630,6 +707,16 @@ export class InAppMessagingService {
         if (shown && !engaged) this.logEvent(campaign, 'dismiss', shownTo);
         this.retryPending();
       },
+      onGameCompleted: () => {
+        // A play belongs to the customer it was shown to; a later one starts with none.
+        if (!campaign.message.widget || this.generation !== generation) return;
+        this.played.add(campaignKeyOf(campaign));
+        iamLog(
+          `${describeCampaign(
+            campaign
+          )} played; it is not offered again until the next sync`
+        );
+      },
     });
     if (!presented) {
       this.defer(campaign, 'no presentation surface available');
@@ -648,12 +735,14 @@ export class InAppMessagingService {
   }
 
   private defer(campaign: Campaign, reason: string): void {
-    if (this.pending && this.pending.campaignId !== campaign.campaignId)
+    if (this.pending && campaignKeyOf(this.pending) !== campaignKeyOf(campaign))
       iamLog(
-        `pending campaign "${this.pending.campaignId}" displaced by "${campaign.campaignId}"`
+        `pending ${describeCampaign(
+          this.pending
+        )} displaced by ${describeCampaign(campaign)}`
       );
     this.pending = campaign;
-    iamLog(`campaign "${campaign.campaignId}" deferred: ${reason}`);
+    iamLog(`${describeCampaign(campaign)} deferred: ${reason}`);
   }
 
   private logEvent(
@@ -664,6 +753,19 @@ export class InAppMessagingService {
     url?: string
   ): void {
     if (campaign.isTest) return; // a dashboard test send reports nothing
+
+    // A game campaign is not a message campaign. Engagement is recorded through the challenge
+    // flow when the customer plays it, and an event sent here would attribute against a campaign
+    // id that is not a message — campaignId is 0 on every game entry. The display history is
+    // still recorded; only the reporting stops.
+    if (campaign.message.widget) {
+      iamLog(
+        `${describeCampaign(
+          campaign
+        )} displayed; reporting nothing, as engagement is recorded through the challenge flow`
+      );
+      return;
+    }
     this.analytics.log(
       createMessageEvent({
         type,
@@ -680,14 +782,40 @@ export class InAppMessagingService {
 
   private retryPending(): void {
     if (!this.isStarted) return;
-    const campaign = this.pending;
-    if (!campaign) return;
+    const parked = this.pending;
+    if (!parked) return;
     this.pending = null;
-    const capState = this.cap.snapshot();
+    // Judged again on what is known now rather than when it was parked: a sync may have replaced
+    // the set since, and the time it waited may have taken it past its expiry.
+    const campaign = this.latestVersionOf(parked);
+    if (campaign === null) {
+      iamLog(
+        `pending ${describeCampaign(
+          parked
+        )} dropped: the latest sync no longer carries it`
+      );
+      return;
+    }
     const now = this.clock();
+    if (hasExpiredAt(campaign, now)) {
+      iamLog(
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it expired while it waited`
+      );
+      return;
+    }
+    const heldBack = this.gameHeldBack(campaign);
+    if (heldBack !== null) {
+      iamLog(`pending ${describeCampaign(campaign)} dropped: ${heldBack}`);
+      return;
+    }
+    const capState = this.cap.snapshot();
     if (!isRepeatEligible(campaign, capState, now)) {
       iamLog(
-        `pending campaign "${campaign.campaignId}" dropped: it may not display again yet`
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it may not display again yet`
       );
       return;
     }
@@ -698,11 +826,19 @@ export class InAppMessagingService {
     }
     if (this.quietHours && quietHoursContains(this.quietHours, new Date(now))) {
       iamLog(
-        `pending campaign "${campaign.campaignId}" dropped: it is now inside the quiet-hours window`
+        `pending ${describeCampaign(
+          campaign
+        )} dropped: it is now inside the quiet-hours window`
       );
       return;
     }
     this.tryPresent(campaign);
+  }
+
+  /** The held set's version of a campaign, or null when the latest sync no longer carries it. */
+  private latestVersionOf(campaign: Campaign): Campaign | null {
+    const key = campaignKeyOf(campaign);
+    return this.campaigns.find((c) => campaignKeyOf(c) === key) ?? null;
   }
 
   /** Retries the parked message the moment the floor lapses. */

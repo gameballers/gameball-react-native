@@ -9,6 +9,7 @@ import { deviceInsets } from './safe-area';
 import { SlideupView } from './views/SlideupView';
 import { ModalView } from './views/ModalView';
 import { FullscreenView } from './views/FullscreenView';
+import { WidgetView } from './views/WidgetView';
 
 export interface GameballInAppMessagesProps {
   /**
@@ -37,15 +38,24 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
     insets,
   }: GameballInAppMessagesProps) {
     const [current, setCurrent] = useState<PresentedMessage | null>(null);
+    /** The presentation whose game has drawn. A game takes the screen only from then on. */
+    const [drawnGame, setDrawnGame] = useState<number | null>(null);
 
     useEffect(() => presenter.attach(setCurrent), []);
 
     const message = current?.message;
+    const gameUp = !!message?.widget && drawnGame === current?.key;
 
     // Android's back button closes a modal or a full screen, and never a slide-up: a banner is
-    // not what the customer was trying to leave.
+    // not what the customer was trying to leave. Nor a game still loading out of sight: until it
+    // has drawn, the press is the app's.
     useEffect(() => {
-      if (!message || message.type === 'slideup' || Platform.OS !== 'android') {
+      if (
+        !message ||
+        message.type === 'slideup' ||
+        (message.widget && !gameUp) ||
+        Platform.OS !== 'android'
+      ) {
         return;
       }
       const subscription = BackHandler.addEventListener(
@@ -56,7 +66,7 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
         }
       );
       return () => subscription.remove();
-    }, [message]);
+    }, [message, gameUp]);
 
     if (!current || !message) {
       return null;
@@ -74,6 +84,46 @@ export function createGameballInAppMessages(presenter: ReactMessagePresenter) {
       }
     };
     const dismiss = () => presenter.dismiss();
+
+    // A reward campaign is its own composition, before the type branches: it has no artwork, and
+    // its content arrives over the network at display time.
+    if (message.widget) {
+      // Composed by the presenter as the game was presented, which refuses a game it has no url
+      // for: there is always one here.
+      const url = current.gameUrl;
+      if (url === null) {
+        return null;
+      }
+      const { key, onShown } = current;
+      return (
+        // The SDK's own layer over the app, not a Modal. A Modal holds every touch on the screen
+        // from the moment it mounts, whatever is drawn in it, and a game takes seconds to draw:
+        // in one, the app sat frozen behind a game nobody could see yet. Here, out of sight is
+        // untouchable too, so the app stays usable until the game is ready to take the screen.
+        <View
+          testID="gb-iam-game"
+          style={StyleSheet.absoluteFill}
+          pointerEvents="box-none"
+          // What a Modal did for VoiceOver once the game is up: the app behind it goes quiet.
+          accessibilityViewIsModal={gameUp}
+        >
+          <WidgetView
+            key={key}
+            message={message}
+            url={url}
+            onShown={() => {
+              setDrawnGame(key);
+              onShown();
+            }}
+            onFailed={dismiss}
+            onDismiss={dismiss}
+            onCompleted={() => current.callbacks.onGameCompleted?.()}
+            topInset={topInset}
+            bottomInset={bottomInset}
+          />
+        </View>
+      );
+    }
 
     if (message.type === 'slideup') {
       return (

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Modal, StyleSheet } from 'react-native';
+import { BackHandler, Image, Modal, Platform, StyleSheet } from 'react-native';
 import TestRenderer, { act } from 'react-test-renderer';
 import { createGameballInAppMessages } from '../../presentation/GameballInAppMessages';
 import { ReactMessagePresenter } from '../../presentation/message-presenter';
@@ -21,6 +21,7 @@ function messageOf(overrides: Partial<InAppMessage> = {}): InAppMessage {
     dismissible: true,
     scrimDismisses: true,
     style: {},
+    widget: null,
     ...overrides,
   } as InAppMessage;
 }
@@ -329,6 +330,7 @@ function recorder() {
     onDismissed: () => log.push('dismissed'),
     onButtonPressed: () => log.push('button'),
     onMessagePressed: () => log.push('tap'),
+    onGameCompleted: () => log.push('completed'),
   };
 }
 
@@ -411,3 +413,427 @@ function stage(tree: TestRenderer.ReactTestRenderer): typeof HIDDEN {
       node.props.importantForAccessibility === 'no-hide-descendants',
   };
 }
+
+describe('games', () => {
+  /** A reward campaign: no artwork, its content a live widget. */
+  function game(
+    id: string,
+    type: 'modal' | 'fullscreen' = 'modal'
+  ): InAppMessage {
+    return message({
+      id,
+      type,
+      header: null,
+      body: null,
+      widget: {
+        gameCampaignId: 7,
+        gameCampaignType: 'wheel',
+      },
+    });
+  }
+
+  /** What the injected readiness script posts from inside the widget. */
+  function post(tree: TestRenderer.ReactTestRenderer, data: string): void {
+    tree.root
+      .find(
+        (n) => typeof n.type === 'string' && n.props.testID === 'gb-webview'
+      )
+      .props.onMessage({ nativeEvent: { data } });
+  }
+
+  /** True while some view above the widget is transparent. */
+  function hidden(tree: TestRenderer.ReactTestRenderer): boolean {
+    let n: TestRenderer.ReactTestInstance | null = tree.root.find(
+      (x) => typeof x.type === 'string' && x.props.testID === 'gb-webview'
+    );
+    for (; n; n = n.parent) {
+      const style = (StyleSheet.flatten(n.props.style) ?? {}) as {
+        opacity?: number;
+      };
+      if (typeof n.type === 'string' && style.opacity === 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** What the controller composes from messaging's own configuration as a game is presented. */
+  const GAME_URL =
+    'https://m.gameball.app?customerId=c1&apiKey=k&openDetail=details_wheel_7&hideNavigation=true';
+
+  /** A presenter as the controller builds it: no artwork to hold, and a url for every game. */
+  function gamePresenter(): ReactMessagePresenter {
+    return new ReactMessagePresenter({
+      artwork: () => null,
+      gameUrl: () => GAME_URL,
+    });
+  }
+
+  /** The layer a game draws in: the SDK's own, over the app, rather than a Modal. */
+  function layer(tree: TestRenderer.ReactTestRenderer) {
+    return tree.root.find(
+      (n) => typeof n.type === 'string' && n.props.testID === 'gb-iam-game'
+    );
+  }
+
+  it('loads a game without taking the screen, and takes it only once the game has drawn', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    // A Modal holds every touch on the screen from the moment it mounts, whatever is drawn in
+    // it, and a game takes seconds to draw: loading in one froze the app with nothing on screen.
+    expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+    expect(stage(tree)).toEqual(HIDDEN);
+    expect(layer(tree).props.accessibilityViewIsModal).toBe(false);
+
+    act(() => post(tree, 'gb:ready'));
+    expect(calls.log).toEqual(['shown']);
+    expect(stage(tree)).toEqual(REVEALED);
+    // Drawn over the app now: VoiceOver keeps to the game, as it would inside a Modal.
+    expect(layer(tree).props.accessibilityViewIsModal).toBe(true);
+    unmount(tree);
+  });
+
+  it('loads the game at the url it was presented with, needing nothing from the profile widget', () => {
+    // The url used to be read off the profile widget's statics, which only showProfile sets: in
+    // an app that never opened the profile, every game was dropped for want of an api key.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+
+    act(() => {
+      presenter.present(game('g'), recorder());
+    });
+
+    const web = tree.root.find(
+      (n) => typeof n.type === 'string' && n.props.testID === 'gb-webview'
+    );
+    expect(web.props.source).toEqual({ uri: GAME_URL });
+    unmount(tree);
+  });
+
+  it('leaves the Android back button to the app while a game loads, and closes the game with it once it is up', () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    type BackPress = Parameters<typeof BackHandler.addEventListener>[1];
+    const handlers: BackPress[] = [];
+    jest
+      .spyOn(BackHandler, 'addEventListener')
+      .mockImplementation((_event, handler) => {
+        handlers.push(handler);
+        return {
+          remove: () => {
+            handlers.splice(handlers.indexOf(handler), 1);
+          },
+        };
+      });
+    // What Android does with a press: offers it to the handlers, newest first; true keeps it.
+    const pressBack = () =>
+      handlers
+        .slice()
+        .reverse()
+        .some(
+          (handler) =>
+            handler({ type: 'hardwareBackPress', timeStamp: Date.now() }) ===
+            true
+        );
+
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    let kept = true;
+    act(() => {
+      kept = pressBack();
+    });
+    // Nothing is on screen yet, so the press is the app's: it navigates, the game keeps loading.
+    expect(kept).toBe(false);
+    expect(presenter.isShowing).toBe(true);
+
+    act(() => post(tree, 'gb:ready'));
+    act(() => {
+      kept = pressBack();
+    });
+    expect(kept).toBe(true);
+    expect(calls.log).toEqual(['shown', 'dismissed']);
+    unmount(tree);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('draws a game presented the moment the last one closed in a view of its own', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const next = recorder();
+    const first = {
+      ...recorder(),
+      // The service presents the game parked behind this one as it leaves, in the same update.
+      onDismissed: () => {
+        presenter.present(game('next'), next);
+      },
+    };
+
+    act(() => {
+      presenter.present(game('first'), first);
+    });
+    act(() => post(tree, 'gb:ready'));
+    expect(first.log).toEqual(['shown']);
+    act(() => post(tree, 'gb:close'));
+
+    // The next game has not drawn yet: nothing of it on screen, nothing counted.
+    expect(hidden(tree)).toBe(true);
+    expect(next.log).toEqual([]);
+    act(() => post(tree, 'gb:ready'));
+    expect(hidden(tree)).toBe(false);
+    expect(next.log).toEqual(['shown']);
+    unmount(tree);
+  });
+
+  it('reports a finished game against the game it opened, whatever the widget calls it', () => {
+    // The widget names the challenge and its own game type ('spinTheWheel' for a 'wheel'), which
+    // are not the sync's literals: the completion belongs to whichever game this view opened.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() =>
+      post(
+        tree,
+        'gb:event:' +
+          JSON.stringify({
+            type: 'gameCompleted',
+            metadata: {
+              hasWon: true,
+              campaignId: '123',
+              campaignType: 'spinTheWheel',
+            },
+          })
+      )
+    );
+
+    expect(calls.log).toEqual(['shown', 'completed']);
+    // Finishing is not leaving: the customer is still reading what they won.
+    expect(presenter.isShowing).toBe(true);
+    unmount(tree);
+  });
+
+  /** The control the SDK draws to close a game: the widget's own page shows none on mobile. */
+  function closeButton(
+    tree: TestRenderer.ReactTestRenderer
+  ): TestRenderer.ReactTestInstance {
+    return tree.root.findByProps({ testID: 'gb-iam-close' });
+  }
+
+  it.each(['modal', 'fullscreen'] as const)(
+    'draws a close button over a %s game, and closes the game with it',
+    (type) => {
+      const presenter = gamePresenter();
+      const Host = createGameballInAppMessages(presenter);
+      const tree = mount(<Host />);
+      const calls = recorder();
+      act(() => {
+        presenter.present(game('g', type), calls);
+      });
+      act(() => post(tree, 'gb:ready'));
+
+      const close = closeButton(tree);
+      expect(close.props.accessibilityLabel).toBe('Close');
+      expect(close.props.accessibilityRole).toBe('button');
+
+      act(() => close.props.onPress());
+      expect(calls.log).toEqual(['shown', 'dismissed']);
+      expect(presenter.isShowing).toBe(false);
+      unmount(tree);
+    }
+  );
+
+  it.each(['modal', 'fullscreen'] as const)(
+    "puts a %s game's close button at the top end, in the safe area, with room for a thumb",
+    (type) => {
+      const presenter = gamePresenter();
+      const Host = createGameballInAppMessages(presenter);
+      const tree = mount(<Host insets={{ top: 47, bottom: 34 }} />);
+      act(() => {
+        presenter.present(game('g', type), recorder());
+      });
+
+      const style = StyleSheet.flatten(closeButton(tree).props.style) as {
+        position?: string;
+        top?: number;
+        end?: number;
+        left?: number;
+        right?: number;
+        width?: number;
+        height?: number;
+      };
+      expect(style.position).toBe('absolute');
+      // The logical end, never a physical side: React Native mirrors `end` under RTL itself.
+      expect(style.end).toBeGreaterThanOrEqual(0);
+      expect(style.left).toBeUndefined();
+      expect(style.right).toBeUndefined();
+      // 44pt is the smallest target either platform's guidelines allow.
+      expect(style.width).toBeGreaterThanOrEqual(44);
+      expect(style.height).toBeGreaterThanOrEqual(44);
+      if (type === 'fullscreen') {
+        // Edge to edge, so it clears the notch by the top inset.
+        expect(style.top).toBeGreaterThanOrEqual(47);
+      } else {
+        // On the card, which sits centred well inside the safe area.
+        const card = tree.root.findByProps({ testID: 'gb-iam-game-card' });
+        const onCard = card.findAll(
+          (n) => typeof n.type === 'string' && n.props.testID === 'gb-iam-close'
+        );
+        expect(onCard).toHaveLength(1);
+      }
+      unmount(tree);
+    }
+  );
+
+  it('closes a modal game at a tap on the dimmed app around it', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g', 'modal'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() =>
+      tree.root.findByProps({ testID: 'gb-iam-scrim' }).props.onPress()
+    );
+    expect(calls.log).toEqual(['shown', 'dismissed']);
+    unmount(tree);
+  });
+
+  it('takes no other widget event, nor one it cannot read, for a finished game', () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+    act(() => post(tree, 'gb:ready'));
+
+    act(() => post(tree, 'gb:event:{"type":"gameStarted","metadata":{}}'));
+    act(() => post(tree, 'gb:event:gameCompleted'));
+    act(() => post(tree, 'gb:event:[object Object]'));
+
+    expect(calls.log).toEqual(['shown']);
+    unmount(tree);
+  });
+
+  /** What the widget posts once the page it opened is on screen, saying whether it can be played. */
+  function gameReady(metadata?: unknown): string {
+    return (
+      'gb:event:' +
+      JSON.stringify(
+        metadata === undefined
+          ? { type: 'gameReady' }
+          : { type: 'gameReady', metadata }
+      )
+    );
+  }
+
+  it('shows a game the moment the widget says it is on screen', () => {
+    // The widget's own word, ahead of the readiness guess, which can miss a drawn game: an Arabic
+    // scratch card with no Arabic title has 36 characters of text and no image, and never passed.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady({ page: 'details', playable: true })));
+
+    expect(calls.log).toEqual(['shown']);
+    expect(stage(tree)).toEqual(REVEALED);
+    unmount(tree);
+  });
+
+  it('takes a game the widget says cannot be played away, never having shown it', () => {
+    // Already played today, not available, or the widget's own error screen: that page is all the
+    // customer would see.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() =>
+      post(
+        tree,
+        gameReady({ page: 'details', playable: false, reason: 'unplayable' })
+      )
+    );
+
+    expect(calls.log).toEqual(['dismissed']);
+    expect(presenter.isShowing).toBe(false);
+    unmount(tree);
+  });
+
+  it.each([
+    ['the page and nothing more', { page: 'details' }],
+    ['no metadata', undefined],
+    ['metadata it cannot read', 'details'],
+  ])('shows a game the widget says is on screen with %s', (_, metadata) => {
+    // Only an explicit "cannot be played" holds a game back.
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady(metadata)));
+
+    expect(calls.log).toEqual(['shown']);
+    unmount(tree);
+  });
+
+  it("stands by the widget's first word", () => {
+    const presenter = gamePresenter();
+    const Host = createGameballInAppMessages(presenter);
+    const tree = mount(<Host />);
+    const calls = recorder();
+    act(() => {
+      presenter.present(game('g'), calls);
+    });
+
+    act(() => post(tree, gameReady({ page: 'details', playable: true })));
+    act(() =>
+      post(
+        tree,
+        gameReady({ page: 'details', playable: false, reason: 'error' })
+      )
+    );
+    act(() => post(tree, 'gb:timeout'));
+
+    expect(calls.log).toEqual(['shown']);
+    expect(presenter.isShowing).toBe(true);
+    unmount(tree);
+  });
+});

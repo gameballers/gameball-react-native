@@ -16,6 +16,15 @@ export interface GameballConfig {
   sessionToken?: string;
   apiPrefix?: string;
   /**
+   * The widget host to load, when it is not the production one.
+   *
+   * Applies to everything the SDK opens in a webview: the profile widget and any game campaign an
+   * in-app trigger opens. Set once here, a host pointed at a non-production environment is pointed
+   * there for both, and the two cannot silently disagree. `ShowProfileRequest.widgetUrlPrefix`
+   * still overrides it for one presentation.
+   */
+  widgetUrlPrefix?: string;
+  /**
    * Console diagnostics for in-app messaging, prefixed `[GameballIAM]`.
    *
    * Defaults to `__DEV__`: on while you are building, silent in the release build your
