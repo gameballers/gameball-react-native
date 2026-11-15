@@ -29,6 +29,13 @@ import {
 
 const package_json = require('../package.json');
 
+/** A push tap to report as clicked, with the app's callback for that report. */
+interface PushClick {
+  token: string;
+  occurredAt: number;
+  callback?: Callback<boolean>;
+}
+
 /**
  * Primary Gameball SDK entry point providing comprehensive functionality
  * with modern React Native API and builder pattern request models.
@@ -63,6 +70,9 @@ export class GameballApp {
     report: (body) => this.makeRequest(API_ENDPOINTS.PUSH_ENGAGEMENT, body),
   });
 
+  // Taps handed over before init gave the SDK its API key, reported as soon as it does
+  private heldClicks: PushClick[] = [];
+
   private constructor() {}
 
   /**
@@ -87,6 +97,12 @@ export class GameballApp {
       this.apiKey = config.apiKey;
       this.sessionToken = config.sessionToken || null;
       this.lang = LanguageUtils.normalize(config.lang || 'en');
+
+      // A tap on the push that started the app usually arrives before this call. Its report
+      // needs only the API key, so it goes now rather than after bot settings load.
+      if (this.apiKey) {
+        this.heldClicks.splice(0).forEach((click) => this.reportClick(click));
+      }
 
       // Restore the customer preferred language saved before a relaunch
       this.customerPreferredLanguage = await AsyncStorage.getItem(
@@ -304,7 +320,9 @@ export class GameballApp {
    * When the notification is a Gameball one and carries a click token, the tap is reported
    * to Gameball to count the campaign click; the optional callback receives that report's result.
    * Each tap counts once per app run, so passing the same notification from both
-   * `getInitialNotification` and `onNotificationOpenedApp` is safe.
+   * `getInitialNotification` and `onNotificationOpenedApp` is safe. A tap passed in before
+   * `init` is held and reported once `init` is called, so it can be handed over at start-up
+   * without waiting for `init`.
    * @param payload - The notification's data payload
    * @param callback - Optional callback receiving whether the report succeeded
    * @param sessionToken - Optional session token for this request.
@@ -326,15 +344,7 @@ export class GameballApp {
     // Override or clear sessionToken - always update on every call
     this.sessionToken = sessionToken || null;
 
-    if (!this.isInitialized) {
-      // Not counted yet, so a call after init still reports it; but the tap still opened
-      // the app, and a tapped push is never an influenced open
-      this.engagement.onTapBeforeReady(payload);
-      callback?.onError?.(new Error(ERROR_MESSAGES.NOT_INITIALIZED));
-      return true;
-    }
-
-    // Counted once per app run
+    // Counted once per app run, before init as after it
     if (!this.engagement.onTap(payload)) {
       callback?.onSuccess?.(true);
       return true;
@@ -344,9 +354,20 @@ export class GameballApp {
       return true;
     }
 
+    // Dated when the SDK handles the tap, even when the report has to wait for init
+    const click: PushClick = { token, occurredAt: Date.now(), callback };
+    if (!this.apiKey) {
+      this.heldClicks.push(click);
+      return true;
+    }
+    this.reportClick(click);
+    return true;
+  }
+
+  private reportClick({ token, occurredAt, callback }: PushClick): void {
     this.makeRequest(
       API_ENDPOINTS.PUSH_ENGAGEMENT,
-      pushEngagementBody(token, PushEngagementType.Clicked, Date.now())
+      pushEngagementBody(token, PushEngagementType.Clicked, occurredAt)
     ).then(
       () => callback?.onSuccess?.(true),
       (error) =>
@@ -356,7 +377,6 @@ export class GameballApp {
             : new Error(ERROR_MESSAGES.PUSH_CLICK_FAILED)
         )
     );
-    return true;
   }
 
   /**

@@ -321,7 +321,7 @@ describe('Engagement', () => {
     it('counts a tap handled before init toward the cold open it caused', async () => {
       await engagement.onReceived(gbPush('tok-A'));
       clock += minute;
-      engagement.onTapBeforeReady(gbPush('tok-B'));
+      engagement.onTap(gbPush('tok-B'));
       clock += 2_000;
       engagement.start(appState('active'));
       await afterTapGrace();

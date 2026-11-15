@@ -152,15 +152,6 @@ export class Engagement {
     return true;
   }
 
-  /**
-   * A tap the SDK can't count yet (before init). It still opened the app, and its push still
-   * never counts toward an influenced open.
-   */
-  onTapBeforeReady(data: Record<string, any>): void {
-    this.noteTap();
-    this.forget(data);
-  }
-
   /** Another customer's pushes must never credit this customer's opens. */
   clearReceived(): Promise<void> {
     return this.influenced.clear().catch(() => {});
