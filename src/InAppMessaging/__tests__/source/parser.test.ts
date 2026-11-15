@@ -469,6 +469,14 @@ describe('parseSyncResponse rules', () => {
         .campaigns[0]!.message.imageUrl
     ).toBeNull();
   });
+  it('reads an expiry without a zone as UTC, not device time', () => {
+    // A game's end date arrives like this. Read as device time, the game ended early (or late) by
+    // the device's UTC offset.
+    const c = parseSyncResponse(
+      payload([campaign({ expiresAt: '2026-11-04T13:42:00' })])
+    ).campaigns[0]!;
+    expect(c.expiresAt).toBe(Date.UTC(2026, 10, 4, 13, 42));
+  });
   it('reads colours, alignment, extras (coerced to strings), expiresAt and isTest', () => {
     const c = parseSyncResponse(
       payload([
